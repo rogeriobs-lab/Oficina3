@@ -181,11 +181,11 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-bold rounded-xl border border-slate-700/80 backdrop-blur-md transition-all cursor-pointer hover:text-white shrink-0 self-start sm:self-auto disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-bold rounded-xl border border-slate-700/80 backdrop-blur-md transition-all cursor-pointer hover:text-white shrink-0 self-start sm:self-auto disabled:opacity-50 underline decoration-sky-400 underline-offset-4"
               title="Atualizar dados do painel"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>{refreshing ? 'Atualizando...' : 'Atualizar'}</span>
+              <span className="underline decoration-sky-400 underline-offset-4">{refreshing ? 'Atualizando...' : 'Atualizar'}</span>
             </button>
           </div>
 
