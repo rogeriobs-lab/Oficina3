@@ -1,0 +1,6 @@
+{
+  "name": "OficinaPro",
+  "description": "Controle de serviços mecânicos de forma simples para oficinas. Gerencie clientes, veículos e ordens de serviço com facilidade.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
