@@ -201,8 +201,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       message += `\n`;
     }
 
-    message += `*VALOR TOTAL: ${formatCurrency(tot)}*\n\n`;
-    message += `📄 *PDF com Formatação Oficial:* Baixamos o arquivo *${pdfInfo.filename}* no seu dispositivo. Anexe-o nesta conversa para enviar o documento completo e formatado ao cliente!`;
+    message += `*VALOR TOTAL: ${formatCurrency(tot)}*`;
 
     // Se estiver em mobile / navegador que suporta compartilhar arquivo via Web Share API
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfInfo.file] })) {
