@@ -3,7 +3,7 @@ import { supabase, type OrderItem } from '@/src/lib/supabase';
 import { theme, formatDate, formatCurrency, formatPhone } from '@/src/lib/theme';
 import { getSingleOrderNumber } from '@/src/lib/orderUtils';
 import { LoadingState, ErrorState } from './States';
-import { exportOrderToPdf, getOrderPdfFile } from '@/src/lib/exportPdf';
+import { exportOrderToPdf } from '@/src/lib/exportPdf';
 import {
   ArrowLeft,
   User,
@@ -155,21 +155,9 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     setAddModalVisible(true);
   };
 
-  const handleShareWhatsApp = async () => {
+  const handleShareWhatsApp = () => {
     if (!order) return;
     const numDisplay = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
-    const pdfInfo = getOrderPdfFile(order, orderNumber);
-
-    // Baixa o arquivo PDF formatado para o dispositivo do usuário
-    const downloadUrl = URL.createObjectURL(pdfInfo.blob);
-    const downloadLink = document.createElement('a');
-    downloadLink.href = downloadUrl;
-    downloadLink.download = pdfInfo.filename;
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
-
     const rawPhone = order.clients?.phone ? order.clients.phone.replace(/\D/g, '') : '';
     const servs = order.order_items.filter((i) => i.item_type === 'servico');
     const pcs = order.order_items.filter((i) => i.item_type === 'peca');
@@ -202,20 +190,6 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     }
 
     message += `*VALOR TOTAL: ${formatCurrency(tot)}*`;
-
-    // Se estiver em mobile / navegador que suporta compartilhar arquivo via Web Share API
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfInfo.file] })) {
-      try {
-        await navigator.share({
-          title: `Serviço #${numDisplay}`,
-          text: message,
-          files: [pdfInfo.file],
-        });
-        return;
-      } catch (err) {
-        // Se usuário cancelar o share nativo, continua com o link do WhatsApp
-      }
-    }
 
     const formattedPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`) : '';
     const waUrl = formattedPhone
