@@ -191,7 +191,16 @@ export const generateOrderPdf = (order: PdfOrder, customOrderNum?: string): jsPD
 export const exportOrderToPdf = (order: PdfOrder, customOrderNum?: string): void => {
   const doc = generateOrderPdf(order, customOrderNum);
   const numDisplay = customOrderNum ? customOrderNum : order.id.slice(0, 8);
-  doc.save(`servico-${numDisplay}.pdf`);
+  try {
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, '_blank');
+    if (!win) {
+      doc.save(`servico-${numDisplay}.pdf`);
+    }
+  } catch {
+    doc.save(`servico-${numDisplay}.pdf`);
+  }
 };
 
 export const getOrderPdfFile = (order: PdfOrder, customOrderNum?: string): { blob: Blob; file: File; filename: string } => {
