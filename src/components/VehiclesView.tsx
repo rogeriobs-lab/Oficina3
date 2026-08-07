@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, consolidateDuplicateVehicles, deleteVehicleAndAssociations, fetchAllClientsAllPages, type Vehicle, type Client } from '@/src/lib/supabase';
-import { theme } from '@/src/lib/theme';
+import { theme, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
 import { Plus, Search, Car, User, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, ChevronDown, Check, Loader2, Layers } from 'lucide-react';
 
@@ -802,15 +802,15 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
 
   const getVehicleSearchScore = (v: VehicleRow, searchStr: string): number => {
     if (!searchStr) return 0;
-    const normQuery = searchStr.toLowerCase().trim();
+    const normQuery = normalizeForSearch(searchStr).trim();
     if (!normQuery) return 0;
     const cleanQuery = normQuery.replace(/[^a-z0-9]/g, '');
 
-    const plateRaw = (v.plate || '').toLowerCase();
+    const plateRaw = normalizeForSearch(v.plate);
     const plateClean = plateRaw.replace(/[^a-z0-9]/g, '');
-    const brand = (v.brand || '').toLowerCase();
-    const model = (v.model || '').toLowerCase();
-    const clientName = getVehicleOwnerName(v).toLowerCase();
+    const brand = normalizeForSearch(v.brand);
+    const model = normalizeForSearch(v.model);
+    const clientName = normalizeForSearch(getVehicleOwnerName(v));
 
     if (plateRaw.startsWith(normQuery) || (cleanQuery && plateClean.startsWith(cleanQuery))) return 1;
     if (brand.startsWith(normQuery)) return 2;

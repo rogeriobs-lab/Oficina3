@@ -56,3 +56,13 @@ export const formatDate = (date: string): string => {
     year: 'numeric',
   });
 };
+
+export const normalizeForSearch = (str?: string | null): string => {
+  if (!str) return '';
+  return str
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+};
+

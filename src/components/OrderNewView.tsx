@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, fetchAllVehiclesAllPages, type Client, type Vehicle } from '@/src/lib/supabase';
-import { theme, formatCurrency } from '@/src/lib/theme';
+import { theme, formatCurrency, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState } from './States';
 import {
   ArrowLeft,
@@ -136,15 +136,16 @@ function VehicleCombobox({ vehicles, selectedVehicleId, onSelectVehicle, onMerge
   // Score vehicle relevance (prefix-match priority)
   const getVehicleSearchScore = (v: VehicleOption, search: string): number => {
     if (!search) return 0;
-    const normQuery = search.toLowerCase().trim();
+    const normQuery = normalizeForSearch(search).trim();
     if (!normQuery) return 0;
     const cleanQuery = normQuery.replace(/[^a-z0-9]/g, '');
 
-    const plateRaw = (v.plate || '').toLowerCase();
+    const plateRaw = normalizeForSearch(v.plate);
     const plateClean = plateRaw.replace(/[^a-z0-9]/g, '');
-    const brand = (v.brand || '').toLowerCase();
-    const model = (v.model || '').toLowerCase();
-    const clientName = (Array.isArray(v.clients) ? v.clients[0]?.name : (v.clients as any)?.name || '').toLowerCase();
+    const brand = normalizeForSearch(v.brand);
+    const model = normalizeForSearch(v.model);
+    const rawClientName = Array.isArray(v.clients) ? v.clients[0]?.name : (v.clients as any)?.name || '';
+    const clientName = normalizeForSearch(rawClientName);
 
     // 1. Plate starts with query
     if (plateRaw.startsWith(normQuery) || (cleanQuery && plateClean.startsWith(cleanQuery))) {

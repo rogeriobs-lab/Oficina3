@@ -7,6 +7,7 @@ import {
   fetchAllVehiclesAllPages,
   supabase,
 } from '../lib/supabase';
+import { normalizeForSearch } from '../lib/theme';
 import {
   User,
   Car,
@@ -323,27 +324,30 @@ export default function RecordDeletionManager() {
 
   // Filtered lists for dropdowns
   const filteredClients = clients.filter((c) => {
-    const query = clientSearch.toLowerCase();
-    return c.name.toLowerCase().includes(query) || (c.phone && c.phone.includes(query));
+    const query = normalizeForSearch(clientSearch);
+    if (!query) return true;
+    return normalizeForSearch(c.name).includes(query) || (c.phone && normalizeForSearch(c.phone).includes(query));
   });
 
   const filteredVehicles = vehicles.filter((v) => {
-    const query = vehicleSearch.toLowerCase();
+    const query = normalizeForSearch(vehicleSearch);
+    if (!query) return true;
     return (
-      v.plate.toLowerCase().includes(query) ||
-      v.brand.toLowerCase().includes(query) ||
-      v.model.toLowerCase().includes(query) ||
-      (v.client_name && v.client_name.toLowerCase().includes(query))
+      normalizeForSearch(v.plate).includes(query) ||
+      normalizeForSearch(v.brand).includes(query) ||
+      normalizeForSearch(v.model).includes(query) ||
+      (v.client_name && normalizeForSearch(v.client_name).includes(query))
     );
   });
 
   const filteredServices = serviceOrders.filter((s) => {
-    const query = serviceSearch.toLowerCase();
+    const query = normalizeForSearch(serviceSearch);
+    if (!query) return true;
     return (
-      s.id.toLowerCase().includes(query) ||
-      (s.client_name && s.client_name.toLowerCase().includes(query)) ||
-      (s.vehicle_plate && s.vehicle_plate.toLowerCase().includes(query)) ||
-      (s.vehicle_info && s.vehicle_info.toLowerCase().includes(query))
+      normalizeForSearch(s.id).includes(query) ||
+      (s.client_name && normalizeForSearch(s.client_name).includes(query)) ||
+      (s.vehicle_plate && normalizeForSearch(s.vehicle_plate).includes(query)) ||
+      (s.vehicle_info && normalizeForSearch(s.vehicle_info).includes(query))
     );
   });
 

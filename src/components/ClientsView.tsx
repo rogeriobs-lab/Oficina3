@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, deleteClientAndAssociations, type Client } from '@/src/lib/supabase';
-import { theme, formatPhone } from '@/src/lib/theme';
+import { theme, formatPhone, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
 import { Plus, Search, User, Phone, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, Loader2 } from 'lucide-react';
 
@@ -218,17 +218,10 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
 
   const getClientSearchScore = (c: Client, searchStr: string): number => {
     if (!searchStr) return 0;
-    const normTerm = searchStr
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
+    const normTerm = normalizeForSearch(searchStr).trim();
     if (!normTerm) return 0;
 
-    const normName = (c.name || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
+    const normName = normalizeForSearch(c.name);
 
     if (normName.startsWith(normTerm)) return 1;
     if (normName.split(/\s+/).some((w) => w.startsWith(normTerm))) return 2;
@@ -236,11 +229,11 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
 
     const cPhoneDigits = (c.phone || '').replace(/\D/g, '');
     const cleanDigits = searchStr.replace(/\D/g, '');
-    if ((cleanDigits.length >= 3 && cPhoneDigits.includes(cleanDigits)) || (c.phone || '').toLowerCase().includes(normTerm)) {
+    if ((cleanDigits.length >= 3 && cPhoneDigits.includes(cleanDigits)) || normalizeForSearch(c.phone).includes(normTerm)) {
       return 4;
     }
 
-    if (c.notes && c.notes.toLowerCase().includes(normTerm)) return 5;
+    if (c.notes && normalizeForSearch(c.notes).includes(normTerm)) return 5;
 
     return 6;
   };

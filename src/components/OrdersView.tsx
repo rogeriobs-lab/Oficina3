@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, deleteServiceOrder } from '@/src/lib/supabase';
-import { theme, formatDate, formatCurrency } from '@/src/lib/theme';
+import { theme, formatDate, formatCurrency, normalizeForSearch } from '@/src/lib/theme';
 import { computeOrderNumbers } from '@/src/lib/orderUtils';
 import { LoadingState, ErrorState, EmptyState } from './States';
 import { Plus, Search, ClipboardList, Gauge, Calendar, ChevronRight, ChevronLeft, X, Trash2, Loader2 } from 'lucide-react';
@@ -260,24 +260,32 @@ export default function OrdersView({ onNavigate, params }: OrdersViewProps) {
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
   const currentSearchTerm = searchInput.trim() || search.trim();
+  const orderNumMap = computeOrderNumbers(orders);
 
   const filtered = orders.filter((o) => {
     const matchStatus = statusFilter === 'todas' || o.status === statusFilter;
     if (!matchStatus) return false;
     if (!currentSearchTerm) return true;
 
-    const cleanS = currentSearchTerm.toLowerCase();
+    const cleanS = normalizeForSearch(currentSearchTerm);
     const cleanSAlpha = cleanS.replace(/[^a-z0-9]/g, '');
 
-    const plateNorm = (o.vehicles?.plate || '').toLowerCase();
+    const clientNorm = normalizeForSearch(o.clients?.name);
+    const plateNorm = normalizeForSearch(o.vehicles?.plate);
     const plateAlpha = plateNorm.replace(/[^a-z0-9]/g, '');
+    const modelNorm = normalizeForSearch(o.vehicles?.model);
+    const brandNorm = normalizeForSearch(o.vehicles?.brand);
+    const idNorm = normalizeForSearch(o.id);
+    const numNorm = normalizeForSearch(orderNumMap.get(o.id));
 
     const matchSearch =
-      o.clients?.name?.toLowerCase().includes(cleanS) ||
+      clientNorm.includes(cleanS) ||
       plateNorm.includes(cleanS) ||
       (cleanSAlpha.length > 0 && plateAlpha.includes(cleanSAlpha)) ||
-      o.vehicles?.model?.toLowerCase().includes(cleanS) ||
-      o.vehicles?.brand?.toLowerCase().includes(cleanS);
+      modelNorm.includes(cleanS) ||
+      brandNorm.includes(cleanS) ||
+      idNorm.includes(cleanS) ||
+      numNorm.includes(cleanS);
 
     return matchSearch;
   });
