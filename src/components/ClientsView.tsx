@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { supabase, deleteClientAndAssociations, type Client } from '@/src/lib/supabase';
+import { supabase, deleteClientAndAssociations, fetchAllClientsAllPages, type Client } from '@/src/lib/supabase';
 import { theme, formatPhone, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
 import { Plus, Search, User, Phone, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, Loader2 } from 'lucide-react';
@@ -56,57 +56,19 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
 
       if (search.trim()) {
         const term = search.trim();
-        const cleanDigits = term.replace(/\D/g, '');
-
-        const promises = [
-          supabase.from('clients').select('*', { count: 'exact' }).ilike('name', `${term}%`).order('name').range(from, to),
-          supabase.from('clients').select('*', { count: 'exact' }).ilike('name', `%${term}%`).order('name').range(from, to),
-          supabase.from('clients').select('*', { count: 'exact' }).ilike('phone', `%${term}%`).order('name').range(from, to),
-          supabase.from('clients').select('*', { count: 'exact' }).ilike('notes', `%${term}%`).order('name').range(from, to),
-        ];
-
-        if (cleanDigits && cleanDigits !== term && cleanDigits.length >= 3) {
-          promises.push(
-            supabase.from('clients').select('*', { count: 'exact' }).ilike('phone', `%${cleanDigits}%`).order('name').range(from, to)
-          );
-        }
-
-        const responses = await Promise.all(promises);
-        const resultMap = new Map<string, Client>();
-        let maxCount = 0;
-
-        responses.forEach((res) => {
-          if (!res.error && res.data) {
-            res.data.forEach((c: Client) => resultMap.set(c.id, c));
-            if (res.count && res.count > maxCount) maxCount = res.count;
-          }
-        });
-
-        const results = Array.from(resultMap.values());
-        const normTerm = term
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase();
+        const allClients = await fetchAllClientsAllPages();
+        const results = allClients.filter((c) => getClientSearchScore(c, term) < 6);
 
         results.sort((a, b) => {
-          const normA = (a.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-          const normB = (b.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-
-          const aStarts = normA.startsWith(normTerm);
-          const bStarts = normB.startsWith(normTerm);
-          if (aStarts && !bStarts) return -1;
-          if (!aStarts && bStarts) return 1;
-
-          const aWordStarts = normA.split(/\s+/).some((w) => w.startsWith(normTerm));
-          const bWordStarts = normB.split(/\s+/).some((w) => w.startsWith(normTerm));
-          if (aWordStarts && !bWordStarts) return -1;
-          if (!aWordStarts && bWordStarts) return 1;
-
+          const scoreA = getClientSearchScore(a, term);
+          const scoreB = getClientSearchScore(b, term);
+          if (scoreA !== scoreB) return scoreA - scoreB;
           return (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' });
         });
 
-        setClients(results);
-        setTotalCount(maxCount || results.length);
+        const pagedResults = results.slice(from, from + pageSize);
+        setClients(pagedResults);
+        setTotalCount(results.length);
       } else {
         const { data, error, count } = await supabase
           .from('clients')

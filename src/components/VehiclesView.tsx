@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, consolidateDuplicateVehicles, deleteVehicleAndAssociations, fetchAllClientsAllPages, type Vehicle, type Client } from '@/src/lib/supabase';
+import { supabase, consolidateDuplicateVehicles, deleteVehicleAndAssociations, fetchAllClientsAllPages, fetchAllVehiclesAllPages, type Vehicle, type Client } from '@/src/lib/supabase';
 import { theme, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
 import { Plus, Search, Car, User, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, ChevronDown, Check, Loader2, Layers } from 'lucide-react';
@@ -480,51 +480,8 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
       let vehiclesRes: { data: any; error: any; count?: number | null };
 
       if (search.trim()) {
-        const term = search.trim();
-        const cleanPlate = term.replace(/[^a-zA-Z0-9]/g, '');
-
-        const promises: Promise<any>[] = [
-          supabase.from('vehicles').select('*, clients(name)', { count: 'exact' }).ilike('plate', `%${term}%`).order('plate').range(from, to),
-          supabase.from('vehicles').select('*, clients(name)', { count: 'exact' }).ilike('brand', `%${term}%`).order('plate').range(from, to),
-          supabase.from('vehicles').select('*, clients(name)', { count: 'exact' }).ilike('model', `%${term}%`).order('plate').range(from, to),
-          supabase.from('vehicles').select('*, clients(name)', { count: 'exact' }).ilike('notes', `%${term}%`).order('plate').range(from, to),
-        ];
-
-        if (cleanPlate && cleanPlate !== term) {
-          promises.push(
-            supabase.from('vehicles').select('*, clients(name)', { count: 'exact' }).ilike('plate', `%${cleanPlate}%`).order('plate').range(from, to)
-          );
-        }
-
-        // Also search clients table for owner matches
-        const clientMatchesRes = await supabase
-          .from('clients')
-          .select('id')
-          .or(`name.ilike.%${term}%,phone.ilike.%${term}%,notes.ilike.%${term}%`)
-          .limit(100);
-
-        if (clientMatchesRes.data && clientMatchesRes.data.length > 0) {
-          const clientIds = clientMatchesRes.data.map((c) => c.id);
-          promises.push(
-            supabase.from('vehicles').select('*, clients(name)', { count: 'exact' }).in('client_id', clientIds).order('plate').range(from, to)
-          );
-        }
-
-        const responses = await Promise.all(promises);
-        const vMap = new Map<string, VehicleRow>();
-        let maxCount = 0;
-
-        responses.forEach((res) => {
-          if (!res.error && res.data) {
-            res.data.forEach((v: VehicleRow) => vMap.set(v.id, v));
-            if (res.count && res.count > maxCount) maxCount = res.count;
-          }
-        });
-
-        const vList = Array.from(vMap.values());
-        vList.sort((a, b) => (a.plate || '').localeCompare(b.plate || '', 'pt-BR', { sensitivity: 'base' }));
-
-        vehiclesRes = { data: vList, error: null, count: maxCount || vList.length };
+        const allVehicles = await fetchAllVehiclesAllPages();
+        vehiclesRes = { data: allVehicles, error: null, count: allVehicles.length };
       } else {
         vehiclesRes = await supabase
           .from('vehicles')

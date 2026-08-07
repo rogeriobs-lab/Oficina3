@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { supabase, deleteServiceOrder } from '@/src/lib/supabase';
+import { supabase, deleteServiceOrder, fetchAllClientsAllPages, fetchAllVehiclesAllPages } from '@/src/lib/supabase';
 import { theme, formatDate, formatCurrency, normalizeForSearch } from '@/src/lib/theme';
 import { computeOrderNumbers } from '@/src/lib/orderUtils';
 import { LoadingState, ErrorState, EmptyState } from './States';
@@ -71,49 +71,43 @@ export default function OrdersView({ onNavigate, params }: OrdersViewProps) {
       if (cleanTerm) {
         isFiltering = true;
 
-        const vPromises = [
-          supabase.from('vehicles').select('id').ilike('plate', `%${cleanTerm}%`).limit(100),
-          supabase.from('vehicles').select('id').ilike('brand', `%${cleanTerm}%`).limit(100),
-          supabase.from('vehicles').select('id').ilike('model', `%${cleanTerm}%`).limit(100),
-          supabase.from('vehicles').select('id').ilike('notes', `%${cleanTerm}%`).limit(100),
-        ];
+        const normTerm = normalizeForSearch(cleanTerm);
+        const normAlpha = normalizeForSearch(sAlpha);
 
-        if (sAlpha && sAlpha !== cleanTerm) {
-          vPromises.push(supabase.from('vehicles').select('id').ilike('plate', `%${sAlpha}%`).limit(100));
-        }
-
-        const cPromises = [
-          supabase.from('clients').select('id').ilike('name', `%${cleanTerm}%`).limit(100),
-          supabase.from('clients').select('id').ilike('phone', `%${cleanTerm}%`).limit(100),
-          supabase.from('clients').select('id').ilike('notes', `%${cleanTerm}%`).limit(100),
-        ];
-
-        const [vResponses, cResponses] = await Promise.all([
-          Promise.all(vPromises),
-          Promise.all(cPromises),
+        const [allClients, allVehicles] = await Promise.all([
+          fetchAllClientsAllPages(),
+          fetchAllVehiclesAllPages(),
         ]);
 
-        const vehIdsSet = new Set<string>();
-        vResponses.forEach((res) => {
-          if (!res.error && res.data) {
-            res.data.forEach((v: any) => vehIdsSet.add(v.id));
-          }
+        const matchingClients = allClients.filter((c) => {
+          const name = normalizeForSearch(c.name);
+          const phone = normalizeForSearch(c.phone);
+          const notes = normalizeForSearch(c.notes);
+          return name.includes(normTerm) || phone.includes(normTerm) || notes.includes(normTerm);
         });
-        matchingVehicleIds = Array.from(vehIdsSet);
+        matchingClientIds = matchingClients.map((c) => c.id);
 
-        const clientIdsSet = new Set<string>();
-        cResponses.forEach((res) => {
-          if (!res.error && res.data) {
-            res.data.forEach((c: any) => clientIdsSet.add(c.id));
-          }
+        const matchingVehicles = allVehicles.filter((v) => {
+          const plate = normalizeForSearch(v.plate);
+          const plateClean = plate.replace(/[^a-z0-9]/g, '');
+          const brand = normalizeForSearch(v.brand);
+          const model = normalizeForSearch(v.model);
+          const notes = normalizeForSearch(v.notes);
+          const cName = normalizeForSearch(Array.isArray(v.clients) ? v.clients[0]?.name : (v.clients as any)?.name || '');
+          return (
+            plate.includes(normTerm) ||
+            (normAlpha && plateClean.includes(normAlpha)) ||
+            brand.includes(normTerm) ||
+            model.includes(normTerm) ||
+            notes.includes(normTerm) ||
+            cName.includes(normTerm)
+          );
         });
-        matchingClientIds = Array.from(clientIdsSet);
+        matchingVehicleIds = matchingVehicles.map((v) => v.id);
 
         if (matchingVehicleIds.length === 0 && matchingClientIds.length === 0) {
-          setOrders([]);
-          setTotalCount(0);
-          setLoading(false);
-          return;
+          // If cleanTerm is alphanumeric/digits, user might be typing OS number or ID directly
+          // We let query execute without matching IDs and let JS filter check order IDs / numbers
         }
       }
 

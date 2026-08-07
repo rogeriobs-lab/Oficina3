@@ -89,6 +89,7 @@ function VehicleCombobox({ vehicles, selectedVehicleId, onSelectVehicle, onMerge
     if (!activeSearch || activeSearch.length < 1 || !onMergeRemoteVehicles) return;
 
     const term = activeSearch.trim();
+    const normTerm = normalizeForSearch(term);
     const cleanTerm = term.replace(/[^a-zA-Z0-9]/g, '');
 
     const timer = setTimeout(async () => {
@@ -105,10 +106,31 @@ function VehicleCombobox({ vehicles, selectedVehicleId, onSelectVehicle, onMerge
           supabase.from('vehicles').select('*, clients(name)').ilike('model', `%${term}%`).order('plate').limit(100),
         ];
 
+        if (normTerm && normTerm !== term.toLowerCase()) {
+          promises.push(
+            supabase.from('vehicles').select('*, clients(name)').ilike('brand', `%${normTerm}%`).order('plate').limit(100),
+            supabase.from('vehicles').select('*, clients(name)').ilike('model', `%${normTerm}%`).order('plate').limit(100)
+          );
+        }
+
         if (cleanTerm && cleanTerm !== term) {
           promises.push(
             supabase.from('vehicles').select('*, clients(name)').ilike('plate', `${cleanTerm}%`).order('plate').limit(100),
             supabase.from('vehicles').select('*, clients(name)').ilike('plate', `%${cleanTerm}%`).order('plate').limit(100)
+          );
+        }
+
+        // Also search clients table for owner matches
+        const clientMatchesRes = await supabase
+          .from('clients')
+          .select('id')
+          .or(`name.ilike.%${term}%,phone.ilike.%${term}%,notes.ilike.%${term}%`)
+          .limit(100);
+
+        if (clientMatchesRes.data && clientMatchesRes.data.length > 0) {
+          const clientIds = clientMatchesRes.data.map((c) => c.id);
+          promises.push(
+            supabase.from('vehicles').select('*, clients(name)').in('client_id', clientIds).order('plate').limit(100)
           );
         }
 
