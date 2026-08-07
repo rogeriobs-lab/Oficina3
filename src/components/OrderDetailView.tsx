@@ -347,9 +347,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
             </div>
             <div>
               <h3 className="font-bold text-slate-900">{order.clients?.name ?? '—'}</h3>
-              {order.clients?.phone && (
-                <p className="text-sm text-slate-500 mt-1 font-medium">{formatPhone(order.clients.phone)}</p>
-              )}
+              <p className="text-sm text-slate-500 mt-1 font-medium">{formatPhone(order.clients?.phone)}</p>
               {order.clients?.notes && (
                 <p className="text-xs text-slate-600 bg-amber-50/80 p-2 rounded-lg border border-amber-200/80 mt-2 whitespace-pre-wrap font-medium">
                   <span className="font-bold text-amber-900">Observações:</span> {order.clients.notes}

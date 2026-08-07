@@ -26,11 +26,29 @@ export const formatCurrency = (value: number): string => {
   });
 };
 
-export const formatPhone = (val: string | null | undefined): string => {
-  if (!val) return '';
-  let value = val.replace(/\D/g, '');
+export const isInvalidPhone = (val: string | null | undefined): boolean => {
+  if (!val) return true;
+  const digits = val.replace(/\D/g, '');
+  return digits.length <= 3;
+};
+
+export const formatPhone = (val: string | null | undefined, isInputMode = false): string => {
+  if (!val) return isInputMode ? '' : 'não cadastrado';
+
+  const digits = val.replace(/\D/g, '');
+
+  if (digits.length <= 3) {
+    if (isInputMode) {
+      if (digits.length === 0) return '';
+      if (digits.length <= 2) return `(${digits}`;
+      return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    }
+    return 'não cadastrado';
+  }
+
+  let value = digits;
   if (value.length > 11) value = value.slice(0, 11);
-  
+
   if (value.length > 10) {
     // 11 digits: (XX) XXXXX-XXXX
     return `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
@@ -41,7 +59,7 @@ export const formatPhone = (val: string | null | undefined): string => {
     // 3 to 6 digits: (XX) XXXX
     return `(${value.slice(0, 2)}) ${value.slice(2)}`;
   }
-  
+
   return value;
 };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, deleteClientAndAssociations, fetchAllClientsAllPages, type Client } from '@/src/lib/supabase';
-import { theme, formatPhone, normalizeForSearch } from '@/src/lib/theme';
+import { theme, formatPhone, isInvalidPhone, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
 import { Plus, Search, User, Phone, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, Loader2 } from 'lucide-react';
 
@@ -93,7 +93,7 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
   }, [loadClients]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormPhone(formatPhone(e.target.value));
+    setFormPhone(formatPhone(e.target.value, true));
   };
 
   const scrollToTop = () => {
@@ -114,7 +114,7 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
   const openEditModal = (client: Client) => {
     setEditingClient(client);
     setFormName(client.name);
-    setFormPhone(formatPhone(client.phone));
+    setFormPhone(isInvalidPhone(client.phone) ? '' : formatPhone(client.phone, true));
     setFormNotes(client.notes ?? '');
     setFormError(null);
     setModalVisible(true);
@@ -130,9 +130,10 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
     setSaving(true);
     setFormError(null);
     try {
+      const cleanPhone = isInvalidPhone(formPhone) ? null : formPhone.trim() || null;
       const payload = {
         name: formName.trim(),
-        phone: formPhone.trim() || null,
+        phone: cleanPhone,
         notes: formNotes.trim() || null,
       };
       if (editingClient) {
@@ -388,7 +389,8 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {filtered.map((client) => {
-              const rawPhone = client.phone ? client.phone.replace(/\D/g, '') : '';
+              const hasValidPhone = !isInvalidPhone(client.phone);
+              const rawPhone = hasValidPhone && client.phone ? client.phone.replace(/\D/g, '') : '';
               const formattedPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`) : '';
               const waUrl = formattedPhone ? `https://wa.me/${formattedPhone}` : '';
 
@@ -430,24 +432,24 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
                     </div>
 
                     <div className="space-y-2 pt-1 border-t border-slate-100">
-                      {client.phone && (
-                        <div className="flex items-center justify-between text-xs text-slate-600 font-semibold bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-2">
-                            <Phone className="w-3.5 h-3.5 text-sky-600" />
-                            <span>{formatPhone(client.phone)}</span>
-                          </div>
-                          {waUrl && (
-                            <a
-                              href={waUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 hover:bg-emerald-200 px-2 py-0.5 rounded-lg transition-colors"
-                            >
-                              WhatsApp
-                            </a>
-                          )}
+                      <div className="flex items-center justify-between text-xs text-slate-600 font-semibold bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Phone className={`w-3.5 h-3.5 ${hasValidPhone ? 'text-sky-600' : 'text-slate-400'}`} />
+                          <span className={hasValidPhone ? 'text-slate-700 font-semibold' : 'text-slate-400 italic font-normal'}>
+                            {formatPhone(client.phone)}
+                          </span>
                         </div>
-                      )}
+                        {waUrl && (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 hover:bg-emerald-200 px-2 py-0.5 rounded-lg transition-colors"
+                          >
+                            WhatsApp
+                          </a>
+                        )}
+                      </div>
 
                       {client.notes && (
                         <div className="flex items-start gap-2.5 text-xs text-slate-700 bg-amber-50/80 p-3 rounded-xl border border-amber-200/80">

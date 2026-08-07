@@ -74,12 +74,10 @@ export const generateOrderPdf = (order: PdfOrder, customOrderNum?: string): jsPD
   doc.setTextColor(26, 35, 50);
   const clientNameLines = doc.splitTextToSize(order.clients?.name || '—', cardWidth - 8);
   doc.text(clientNameLines[0] || '—', 19, y + 12);
-  if (order.clients?.phone) {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(90, 107, 133);
-    doc.text(formatPhone(order.clients.phone), 19, y + 17);
-  }
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(90, 107, 133);
+  doc.text(formatPhone(order.clients?.phone), 19, y + 17);
 
   // Card 2: Veículo
   doc.setFillColor(245, 247, 250);
