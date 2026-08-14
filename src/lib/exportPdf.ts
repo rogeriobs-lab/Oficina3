@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency, formatDate, formatPhone } from './theme';
+import { parseItemDescription } from './serviceItemUtils';
 
 export type PdfOrder = {
   id: string;
@@ -123,13 +124,19 @@ export const generateOrderPdf = (order: PdfOrder, customOrderNum?: string): jsPD
     autoTable(doc, {
       startY: currentY,
       margin: { left: 15, right: 15 },
-      head: [['Descrição', 'Valor']],
+      head: [['Descrição do Serviço', 'Valor']],
       body: [
-        ...servicos.map((s) => [s.description, formatCurrency(Number(s.price))]),
+        ...servicos.map((s) => {
+          const { title, details } = parseItemDescription(s.description);
+          const fullText = details.length > 0
+            ? `${title}\n${details.map((d) => `  • ${d}`).join('\n')}`
+            : title;
+          return [fullText, formatCurrency(Number(s.price))];
+        }),
         [{ content: 'Subtotal Serviços', styles: { fontStyle: 'bold' } }, { content: formatCurrency(totalServicos), styles: { fontStyle: 'bold', halign: 'right' } }],
       ],
       headStyles: { fillColor: [15, 76, 129], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { textColor: [26, 35, 50], fontSize: 9 },
+      bodyStyles: { textColor: [26, 35, 50], fontSize: 9, cellPadding: 2.5 },
       columnStyles: {
         0: { cellWidth: 'auto' },
         1: { cellWidth: 45, halign: 'right' },

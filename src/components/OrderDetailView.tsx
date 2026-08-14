@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, type OrderItem } from '@/src/lib/supabase';
 import { theme, formatDate, formatCurrency, formatPhone } from '@/src/lib/theme';
 import { getSingleOrderNumber } from '@/src/lib/orderUtils';
+import { formatItemDescription, parseItemDescription } from '@/src/lib/serviceItemUtils';
 import { LoadingState, ErrorState } from './States';
 import { exportOrderToPdf } from '@/src/lib/exportPdf';
 import {
@@ -16,6 +17,7 @@ import {
   X,
   Check,
   Trash2,
+  Pencil,
   FileDown,
   AlertCircle,
   HelpCircle,
@@ -46,9 +48,11 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [addType, setAddType] = useState<'servico' | 'peca'>('servico');
-  const [addDescription, setAddDescription] = useState('');
+  const [addTitle, setAddTitle] = useState('');
   const [addPrice, setAddPrice] = useState('');
+  const [addDetails, setAddDetails] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -87,29 +91,48 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     loadOrder();
   }, [loadOrder]);
 
-  const handleAddItem = async (e: React.FormEvent) => {
+  const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addDescription.trim()) {
-      setAddError('Informe a descrição');
+    if (!addTitle.trim()) {
+      setAddError(addType === 'servico' ? 'Informe o nome do serviço' : 'Informe a descrição da peça');
       return;
     }
     setSaving(true);
     setAddError(null);
     try {
       const priceVal = parseFloat(addPrice.replace(',', '.')) || 0;
-      const { error } = await supabase.from('order_items').insert({
-        order_id: orderId,
-        item_type: addType,
-        description: addDescription.trim(),
-        price: priceVal,
-      });
-      if (error) throw error;
-      setAddDescription('');
+      const finalDescription = addType === 'servico'
+        ? formatItemDescription(addTitle, addDetails)
+        : addTitle.trim();
+
+      if (editingItemId) {
+        const { error } = await supabase
+          .from('order_items')
+          .update({
+            item_type: addType,
+            description: finalDescription,
+            price: priceVal,
+          })
+          .eq('id', editingItemId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('order_items').insert({
+          order_id: orderId,
+          item_type: addType,
+          description: finalDescription,
+          price: priceVal,
+        });
+        if (error) throw error;
+      }
+
+      setAddTitle('');
       setAddPrice('');
+      setAddDetails([]);
+      setEditingItemId(null);
       setAddModalVisible(false);
       loadOrder();
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Erro ao adicionar item');
+      setAddError(err instanceof Error ? err.message : 'Erro ao salvar item');
     } finally {
       setSaving(false);
     }
@@ -148,11 +171,40 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
   };
 
   const openAddModal = (type: 'servico' | 'peca') => {
+    setEditingItemId(null);
     setAddType(type);
-    setAddDescription('');
+    setAddTitle('');
     setAddPrice('');
+    setAddDetails([]);
     setAddError(null);
     setAddModalVisible(true);
+  };
+
+  const openEditModal = (item: OrderItem) => {
+    setEditingItemId(item.id);
+    setAddType(item.item_type);
+    const { title, details } = parseItemDescription(item.description);
+    setAddTitle(title);
+    setAddPrice(item.price ? String(item.price).replace('.', ',') : '');
+    setAddDetails(details);
+    setAddError(null);
+    setAddModalVisible(true);
+  };
+
+  const addDetailToModal = () => {
+    setAddDetails((prev) => [...prev, '']);
+  };
+
+  const updateDetailInModal = (index: number, val: string) => {
+    setAddDetails((prev) => {
+      const next = [...prev];
+      next[index] = val;
+      return next;
+    });
+  };
+
+  const removeDetailFromModal = (index: number) => {
+    setAddDetails((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleShareWhatsApp = () => {
@@ -176,7 +228,13 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     if (servs.length > 0) {
       message += `*Serviços:*\n`;
       servs.forEach((s) => {
-        message += `• ${s.description}: ${formatCurrency(Number(s.price))}\n`;
+        const { title, details } = parseItemDescription(s.description);
+        message += `• *${title}*: ${formatCurrency(Number(s.price))}\n`;
+        if (details.length > 0) {
+          details.forEach((d) => {
+            message += `   - ${d}\n`;
+          });
+        }
       });
       message += `\n`;
     }
@@ -423,7 +481,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
         <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-slate-50/50">
           <div className="flex items-center gap-2">
             <Wrench className="w-5 h-5 text-sky-600" />
-            <h2 className="text-base font-extrabold text-slate-900">Serviços Executados</h2>
+            <h2 className="text-base font-extrabold text-slate-900">Serviços Executados (Mão de Obra)</h2>
           </div>
           {isOpen && (
             <button
@@ -442,25 +500,58 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {servicos.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-5 hover:bg-slate-50/30 transition-all">
-                <span className="text-sm font-medium text-slate-800">{item.description}</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-slate-900">
-                    {formatCurrency(Number(item.price))}
-                  </span>
-                  {isOpen && (
-                    <button
-                      onClick={() => handleDeleteItem(item.id)}
-                      disabled={deleting === item.id}
-                      className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+            {servicos.map((item) => {
+              const { title, details } = parseItemDescription(item.description);
+              return (
+                <div key={item.id} className="p-4 sm:p-5 hover:bg-slate-50/30 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-slate-900">{title}</span>
+                      {details.length > 0 && (
+                        <span className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-100 px-1.5 py-0.5 rounded">
+                          {details.length} {details.length === 1 ? 'item detalhado' : 'itens detalhados'}
+                        </span>
+                      )}
+                    </div>
+                    {details.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-xs text-slate-600 bg-slate-50/80 p-3 rounded-xl border border-slate-200/60 font-normal">
+                        {details.map((detail, dIdx) => (
+                          <li key={dIdx} className="flex items-start gap-2">
+                            <span className="text-sky-500 font-bold leading-none mt-0.5">•</span>
+                            <span className="leading-relaxed">{detail}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    <span className="text-sm font-black text-slate-900">
+                      {formatCurrency(Number(item.price))}
+                    </span>
+                    {isOpen && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="text-slate-400 hover:text-sky-700 p-1.5 rounded-lg hover:bg-sky-50 transition-all cursor-pointer"
+                          title="Editar serviço e detalhes"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          disabled={deleting === item.id}
+                          className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-all cursor-pointer"
+                          title="Excluir serviço"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div className="bg-slate-50/50 flex items-center justify-between p-4 px-5">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subtotal Serviços</span>
               <span className="text-sm font-extrabold text-slate-800">{formatCurrency(totalServicos)}</span>
@@ -494,20 +585,30 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
         ) : (
           <div className="divide-y divide-gray-100">
             {pecas.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-5 hover:bg-slate-50/30 transition-all">
+              <div key={item.id} className="flex items-center justify-between p-4 sm:p-5 hover:bg-slate-50/30 transition-all">
                 <span className="text-sm font-medium text-slate-800">{item.description}</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-slate-900">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-black text-slate-900">
                     {formatCurrency(Number(item.price))}
                   </span>
                   {isOpen && (
-                    <button
-                      onClick={() => handleDeleteItem(item.id)}
-                      disabled={deleting === item.id}
-                      className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="text-slate-400 hover:text-emerald-700 p-1.5 rounded-lg hover:bg-emerald-50 transition-all cursor-pointer"
+                        title="Editar peça"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        disabled={deleting === item.id}
+                        className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-all cursor-pointer"
+                        title="Excluir peça"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -528,28 +629,41 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
         </div>
         <div className="text-xs text-slate-400 max-w-xs font-medium leading-relaxed">
           {isOpen
-            ? 'Este serviço está aberto. Você ainda pode adicionar ou deletar serviços e peças conforme o diagnóstico e orçamento.'
+            ? 'Este serviço está aberto. Você ainda pode adicionar, editar ou excluir serviços e peças conforme o diagnóstico e orçamento.'
             : 'Este serviço está concluído. Para fazer modificações, você precisará reabri-lo primeiro usando os botões superiores.'}
         </div>
       </div>
 
-      {/* Add Item Modal */}
+      {/* Add / Edit Item Modal */}
       {addModalVisible && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden animate-scale-up">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-slate-900">
-                {addType === 'servico' ? 'Adicionar Serviço' : 'Adicionar Peça'}
-              </h2>
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-gray-100 overflow-hidden animate-scale-up max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-2">
+                {addType === 'servico' ? (
+                  <Wrench className="w-5 h-5 text-sky-600" />
+                ) : (
+                  <Package className="w-5 h-5 text-emerald-600" />
+                )}
+                <h2 className="text-lg font-bold text-slate-900">
+                  {editingItemId
+                    ? addType === 'servico'
+                      ? 'Editar Serviço'
+                      : 'Editar Peça'
+                    : addType === 'servico'
+                    ? 'Adicionar Serviço'
+                    : 'Adicionar Peça'}
+                </h2>
+              </div>
               <button
                 onClick={() => setAddModalVisible(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddItem} className="p-6 space-y-4">
+            <form onSubmit={handleSaveItem} className="p-6 space-y-4 overflow-y-auto flex-1">
               {addError && (
                 <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-100">
                   <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
@@ -558,33 +672,88 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
               )}
 
               <div className="space-y-1">
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Descrição *
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  {addType === 'servico' ? 'Nome do Serviço (Mão de Obra) *' : 'Descrição da Peça *'}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder={addType === 'servico' ? 'Ex: Alinhamento e balanceamento' : 'Ex: Filtro de ar cabine'}
-                  value={addDescription}
-                  onChange={(e) => setAddDescription(e.target.value)}
-                  className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:bg-white focus:border-sky-500 transition-all outline-none"
+                  placeholder={addType === 'servico' ? 'Ex: Mão de Obra, Revisão Geral...' : 'Ex: Filtro de ar cabine'}
+                  value={addTitle}
+                  onChange={(e) => setAddTitle(e.target.value)}
+                  className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:bg-white focus:border-sky-500 transition-all outline-none font-medium"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Valor (R$)
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Valor Total (R$)
                 </label>
                 <input
                   type="text"
                   placeholder="0,00"
                   value={addPrice}
                   onChange={(e) => setAddPrice(e.target.value)}
-                  className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:bg-white focus:border-sky-500 transition-all outline-none font-medium"
+                  className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:bg-white focus:border-sky-500 transition-all outline-none font-bold"
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {/* Detalhamento dos Itens do Serviço (sem preço) */}
+              {addType === 'servico' && (
+                <div className="pt-3 border-t border-gray-100 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-bold text-sky-900">
+                        Detalhamento do Serviço (sem preço)
+                      </label>
+                      <p className="text-[11px] text-slate-500">
+                        Cadastre os itens, peças checadas ou tarefas inclusas nesta mão de obra.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addDetailToModal}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg border border-sky-200 transition-all cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      + Adicionar item
+                    </button>
+                  </div>
+
+                  {addDetails.length > 0 ? (
+                    <div className="space-y-2 pt-1 max-h-48 overflow-y-auto pr-1">
+                      {addDetails.map((detail, dIdx) => (
+                        <div key={dIdx} className="flex items-center gap-2">
+                          <span className="text-sky-500 font-bold text-xs pl-1">•</span>
+                          <input
+                            type="text"
+                            placeholder={`Item ${dIdx + 1} deste serviço (ex: Troca de pastilhas, sangria de freio...)`}
+                            value={detail}
+                            onChange={(e) => updateDetailInModal(dIdx, e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-sky-400 rounded-lg text-slate-800 text-xs transition-all outline-none font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeDetailFromModal(dIdx)}
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all cursor-pointer"
+                            title="Remover detalhe"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-sky-50/50 rounded-xl border border-dashed border-sky-200 text-center">
+                      <p className="text-xs text-sky-800 font-medium">
+                        Nenhum detalhe adicionado ainda. Clique no botão acima para detalhar as atividades deste serviço.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setAddModalVisible(false)}
@@ -598,7 +767,13 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
                   className="flex-1 py-2.5 text-white rounded-xl text-sm font-bold shadow-md hover:opacity-90 transition-all cursor-pointer flex items-center justify-center"
                   style={{ backgroundColor: theme.accent }}
                 >
-                  {saving ? 'Cadastrando...' : 'Cadastrar Item'}
+                  {saving
+                    ? 'Salvando...'
+                    : editingItemId
+                    ? 'Salvar Alterações'
+                    : addType === 'servico'
+                    ? 'Cadastrar Serviço'
+                    : 'Cadastrar Peça'}
                 </button>
               </div>
             </form>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, fetchAllVehiclesAllPages, type Client, type Vehicle } from '@/src/lib/supabase';
 import { theme, formatCurrency, normalizeForSearch } from '@/src/lib/theme';
+import { formatItemDescription } from '@/src/lib/serviceItemUtils';
 import { LoadingState, ErrorState } from './States';
 import {
   ArrowLeft,
@@ -22,8 +23,9 @@ import {
 type ItemDraft = {
   key: string;
   item_type: 'servico' | 'peca';
-  description: string;
+  title: string;
   price: string;
+  details: string[];
 };
 
 type VehicleOption = Vehicle & { clients: Pick<Client, 'name'> };
@@ -397,12 +399,44 @@ export default function OrderNewView({ onBack, onNavigateToOrderDetails, presele
   const addItem = (type: 'servico' | 'peca') => {
     setItems((prev) => [
       ...prev,
-      { key: Math.random().toString(36).substring(2, 11), item_type: type, description: '', price: '' },
+      {
+        key: Math.random().toString(36).substring(2, 11),
+        item_type: type,
+        title: type === 'servico' ? '' : '',
+        price: '',
+        details: [],
+      },
     ]);
   };
 
-  const updateItem = (key: string, field: 'description' | 'price', value: string) => {
+  const updateItem = (key: string, field: 'title' | 'price', value: string) => {
     setItems((prev) => prev.map((i) => (i.key === key ? { ...i, [field]: value } : i)));
+  };
+
+  const addDetailToItem = (itemKey: string) => {
+    setItems((prev) =>
+      prev.map((i) => (i.key === itemKey ? { ...i, details: [...i.details, ''] } : i))
+    );
+  };
+
+  const updateDetailOfItem = (itemKey: string, detailIndex: number, value: string) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.key !== itemKey) return i;
+        const newDetails = [...i.details];
+        newDetails[detailIndex] = value;
+        return { ...i, details: newDetails };
+      })
+    );
+  };
+
+  const removeDetailOfItem = (itemKey: string, detailIndex: number) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.key !== itemKey) return i;
+        return { ...i, details: i.details.filter((_, idx) => idx !== detailIndex) };
+      })
+    );
   };
 
   const removeItem = (key: string) => {
@@ -427,8 +461,8 @@ export default function OrderNewView({ onBack, onNavigateToOrderDetails, presele
       setFormError('Informe a data');
       return;
     }
-    if (items.some((i) => !i.description.trim())) {
-      setFormError('Preencha a descrição de todos os itens criados');
+    if (items.some((i) => !i.title.trim())) {
+      setFormError('Preencha a descrição/título de todos os serviços e peças');
       return;
     }
     setSaving(true);
@@ -457,7 +491,7 @@ export default function OrderNewView({ onBack, onNavigateToOrderDetails, presele
           items.map((i) => ({
             order_id: orderData.id,
             item_type: i.item_type,
-            description: i.description.trim(),
+            description: formatItemDescription(i.title, i.details),
             price: parseFloat(i.price.replace(',', '.')) || 0,
           }))
         );
@@ -600,54 +634,110 @@ export default function OrderNewView({ onBack, onNavigateToOrderDetails, presele
                 {items.map((item, index) => (
                   <div
                     key={item.key}
-                    className={`flex flex-col sm:flex-row gap-3 p-4 rounded-xl border ${
+                    className={`p-4 rounded-xl border space-y-3 ${
                       item.item_type === 'servico'
-                        ? 'bg-sky-50/20 border-sky-100'
-                        : 'bg-emerald-50/20 border-emerald-100'
+                        ? 'bg-sky-50/25 border-sky-100'
+                        : 'bg-emerald-50/25 border-emerald-100'
                     }`}
                   >
-                    <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                      <span className="text-xs font-bold text-slate-400">#{index + 1}</span>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                          item.item_type === 'servico'
-                            ? 'bg-sky-100 text-sky-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                      <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                        <span className="text-xs font-bold text-slate-400">#{index + 1}</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                            item.item_type === 'servico'
+                              ? 'bg-sky-100 text-sky-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {item.item_type === 'servico' ? <Wrench className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                          {item.item_type === 'servico' ? 'Mão de Obra / Serviço' : 'Peça'}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 w-full">
+                        <input
+                          type="text"
+                          required
+                          placeholder={item.item_type === 'servico' ? 'Nome do serviço (ex: Mão de Obra, Revisão Geral...)' : 'Descrição da peça (ex: Filtro de óleo)...'}
+                          value={item.title}
+                          onChange={(e) => updateItem(item.key, 'title', e.target.value)}
+                          className="block w-full px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:border-slate-400 transition-all outline-none font-medium"
+                        />
+                      </div>
+
+                      <div className="w-full sm:w-32 shrink-0">
+                        <input
+                          type="text"
+                          placeholder="Valor (R$)"
+                          value={item.price}
+                          onChange={(e) => updateItem(item.key, 'price', e.target.value)}
+                          className="block w-full px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:border-slate-400 transition-all outline-none font-bold"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.key)}
+                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all self-end sm:self-center cursor-pointer shrink-0"
+                        title="Remover este item"
                       >
-                        {item.item_type === 'servico' ? <Wrench className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-                        {item.item_type === 'servico' ? 'Serviço' : 'Peça'}
-                      </span>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
 
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        required
-                        placeholder="Descrição do serviço ou peça..."
-                        value={item.description}
-                        onChange={(e) => updateItem(item.key, 'description', e.target.value)}
-                        className="block w-full px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:border-slate-400 transition-all outline-none"
-                      />
-                    </div>
+                    {/* Detalhamento de Serviços (sem preço) */}
+                    {item.item_type === 'servico' && (
+                      <div className="pt-2 pl-1 sm:pl-4 border-t border-sky-100/70 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                            <span>Detalhamento dos itens deste serviço (sem preço):</span>
+                            {item.details.length > 0 && (
+                              <span className="text-[10px] font-semibold text-sky-700 bg-sky-100/70 px-2 py-0.5 rounded-full">
+                                {item.details.length} {item.details.length === 1 ? 'item' : 'itens'}
+                              </span>
+                            )}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => addDetailToItem(item.key)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-sky-700 hover:text-sky-900 bg-white hover:bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-200 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            + Adicionar detalhe
+                          </button>
+                        </div>
 
-                    <div className="w-full sm:w-32 shrink-0">
-                      <input
-                        type="text"
-                        placeholder="Valor (R$)"
-                        value={item.price}
-                        onChange={(e) => updateItem(item.key, 'price', e.target.value)}
-                        className="block w-full px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:border-slate-400 transition-all outline-none font-medium"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.key)}
-                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all self-end sm:self-auto"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                        {item.details.length > 0 ? (
+                          <div className="space-y-1.5 pt-0.5">
+                            {item.details.map((detail, dIdx) => (
+                              <div key={dIdx} className="flex items-center gap-2">
+                                <span className="text-sky-500 font-bold text-xs pl-1 shrink-0">•</span>
+                                <input
+                                  type="text"
+                                  placeholder={`Item ${dIdx + 1} deste serviço (ex: Troca de pastilhas, sangria de fluido...)`}
+                                  value={detail}
+                                  onChange={(e) => updateDetailOfItem(item.key, dIdx, e.target.value)}
+                                  className="flex-1 px-3 py-1.5 bg-white border border-sky-100 focus:border-sky-300 rounded-lg text-slate-800 text-xs transition-all outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeDetailOfItem(item.key, dIdx)}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all cursor-pointer"
+                                  title="Remover detalhe"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 italic">
+                            Opcional: clique em "+ Adicionar detalhe" para listar os itens e etapas executadas nesta mão de obra.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
