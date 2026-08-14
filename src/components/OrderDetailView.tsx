@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, type OrderItem } from '@/src/lib/supabase';
-import { theme, formatDate, formatCurrency, formatPhone } from '@/src/lib/theme';
+import { theme, formatDate, formatCurrency, formatPhone, isInvalidPhone } from '@/src/lib/theme';
 import { getSingleOrderNumber } from '@/src/lib/orderUtils';
 import { formatItemDescription, parseItemDescription } from '@/src/lib/serviceItemUtils';
 import { LoadingState, ErrorState } from './States';
@@ -23,6 +23,10 @@ import {
   HelpCircle,
   Send,
   Share2,
+  Copy,
+  CheckCheck,
+  Phone,
+  MessageSquare,
 } from 'lucide-react';
 
 type OrderDetail = {
@@ -58,6 +62,11 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
   const [toggling, setToggling] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [forwardModalOpen, setForwardModalOpen] = useState(false);
+  const [forwardPhone, setForwardPhone] = useState('');
+  const [forwardError, setForwardError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const loadOrder = useCallback(async () => {
     try {
@@ -207,10 +216,9 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     setAddDetails((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleShareWhatsApp = () => {
-    if (!order) return;
+  const buildWhatsAppMessage = useCallback(() => {
+    if (!order) return '';
     const numDisplay = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
-    const rawPhone = order.clients?.phone ? order.clients.phone.replace(/\D/g, '') : '';
     const servs = order.order_items.filter((i) => i.item_type === 'servico');
     const pcs = order.order_items.filter((i) => i.item_type === 'peca');
     const tot = order.order_items.reduce((acc, item) => acc + Number(item.price), 0);
@@ -226,7 +234,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     message += `*Data:* ${formatDate(order.order_date)}\n\n`;
 
     if (servs.length > 0) {
-      message += `*Serviços:*\n`;
+      message += `*Serviços (Mão de Obra):*\n`;
       servs.forEach((s) => {
         const { title, details } = parseItemDescription(s.description);
         message += `• *${title}*: ${formatCurrency(Number(s.price))}\n`;
@@ -248,13 +256,58 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     }
 
     message += `*VALOR TOTAL: ${formatCurrency(tot)}*`;
+    return message;
+  }, [order, orderNumber]);
 
-    const formattedPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`) : '';
-    const waUrl = formattedPhone
-      ? `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`;
-
+  const handleShareClientWhatsApp = () => {
+    if (!order) return;
+    const hasValid = !isInvalidPhone(order.clients?.phone);
+    if (!hasValid || !order.clients?.phone) {
+      setForwardPhone('');
+      setForwardError('O cliente não possui telefone cadastrado. Digite o número desejado abaixo para enviar:');
+      setForwardModalOpen(true);
+      return;
+    }
+    const rawPhone = order.clients.phone.replace(/\D/g, '');
+    const formattedPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+    const message = buildWhatsAppMessage();
+    const waUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
+  };
+
+  const handleForwardToCustomPhone = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!order) return;
+    const cleanDigits = forwardPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      setForwardError('Informe um telefone válido com DDD (mínimo 10 dígitos)');
+      return;
+    }
+    const formattedPhone = cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`;
+    const message = buildWhatsAppMessage();
+    const waUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+    setForwardModalOpen(false);
+  };
+
+  const handleForwardChooseContact = () => {
+    if (!order) return;
+    const message = buildWhatsAppMessage();
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+    setForwardModalOpen(false);
+  };
+
+  const handleCopyMessage = async () => {
+    const msg = buildWhatsAppMessage();
+    if (!msg) return;
+    try {
+      await navigator.clipboard.writeText(msg);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // fallback
+    }
   };
 
   if (loading && !order) return <LoadingState />;
@@ -271,50 +324,66 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
   return (
     <div className="space-y-6">
       {/* Top Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 border-b border-gray-100 pb-4">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <button
             onClick={onBack}
-            className="p-2 hover:bg-slate-100 rounded-xl transition-all cursor-pointer text-slate-500"
+            className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-xl transition-all cursor-pointer text-slate-500 shrink-0"
+            title="Voltar"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-extrabold text-slate-900 leading-tight">Serviço</h1>
-              <span className="font-mono text-sm font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-0.5 rounded-lg">
+            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight">Serviço</h1>
+              <span className="font-mono text-xs sm:text-sm font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 sm:px-2.5 py-0.5 rounded-lg">
                 #{orderNumber || order.id.slice(0, 8)}
               </span>
               <span
-                className={`inline-flex items-center px-3 py-0.5 rounded-full text-xs font-bold leading-5 ${
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold leading-5 ${
                   isOpen ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
                 }`}
               >
                 {isOpen ? 'Aberta' : 'Fechada'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1 font-mono">ID: {order.id}</p>
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 font-mono">ID: {order.id}</p>
           </div>
         </div>
 
-        {/* Header Actions */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Header Actions - Compact and Responsive */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {!isOpen && (
             <>
               <button
                 onClick={() => exportOrderToPdf(order, orderNumber)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 text-sky-700 text-sm font-bold rounded-xl border border-sky-100 shadow-xs transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white hover:bg-slate-50 text-sky-700 text-xs sm:text-sm font-bold rounded-xl border border-sky-200 shadow-2xs transition-all cursor-pointer"
+                title="Gerar e salvar orçamento em PDF"
               >
-                <FileDown className="w-4 h-4" />
-                Gerar PDF / Imprimir
+                <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-600 shrink-0" />
+                <span>PDF</span>
               </button>
 
               <button
-                onClick={handleShareWhatsApp}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                onClick={handleShareClientWhatsApp}
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
+                title={order.clients?.phone ? `Enviar para o cliente (${formatPhone(order.clients.phone)})` : 'Enviar WhatsApp para cliente'}
               >
-                <Send className="w-4 h-4" />
-                Enviar por WhatsApp
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span>WhatsApp</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setForwardPhone('');
+                  setForwardError(null);
+                  setForwardModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs sm:text-sm font-bold rounded-xl border border-emerald-200 shadow-2xs transition-all cursor-pointer"
+                title="Encaminhar discriminação para outro telefone ou contato"
+              >
+                <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
+                <span>Encaminhar</span>
               </button>
             </>
           )}
@@ -322,22 +391,22 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
           <button
             onClick={handleToggleStatus}
             disabled={toggling}
-            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-xl shadow-2xs transition-all cursor-pointer ${
               isOpen
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                 : 'bg-white hover:bg-slate-50 text-slate-700 border border-gray-200'
             }`}
           >
-            {isOpen ? <Check className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
-            {toggling ? 'Atualizando...' : isOpen ? 'Concluir Serviço' : 'Reabrir Serviço'}
+            {isOpen ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> : <Wrench className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />}
+            <span>{toggling ? 'Atualizando...' : isOpen ? 'Concluir' : 'Reabrir'}</span>
           </button>
 
           <button
             onClick={() => setShowHelpModal(true)}
             title="Instruções de envio ao cliente"
-            className="inline-flex items-center justify-center p-2.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl border border-sky-200 transition-all cursor-pointer font-bold shrink-0 shadow-xs"
+            className="inline-flex items-center justify-center p-1.5 sm:p-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl border border-sky-200 transition-all cursor-pointer font-bold shrink-0 shadow-2xs"
           >
-            <HelpCircle className="w-5 h-5" />
+            <HelpCircle className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </button>
         </div>
       </div>
@@ -345,7 +414,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       {/* Instructions Modal */}
       {showHelpModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 border border-gray-100 relative">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-xl space-y-4 border border-gray-100 relative">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2 text-sky-800 font-extrabold text-sm">
                 <HelpCircle className="w-5 h-5 text-sky-600" />
@@ -363,21 +432,21 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
                 <p className="font-bold text-slate-800">1. Gerar o arquivo PDF:</p>
                 <p className="text-slate-600">
-                  Clique no botão <strong>"Gerar PDF / Imprimir"</strong> e selecione a opção <strong>"Salvar como PDF"</strong> no seu computador ou celular.
+                  Clique no botão <strong>"PDF"</strong> e selecione a opção <strong>"Salvar como PDF"</strong> no seu computador ou celular.
                 </p>
               </div>
 
               <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-1">
-                <p className="font-bold text-emerald-900">2. Enviar mensagem formatada:</p>
+                <p className="font-bold text-emerald-900">2. Enviar por WhatsApp:</p>
                 <p className="text-emerald-800">
-                  Clique no botão <strong>"Enviar por WhatsApp"</strong> para abrir a conversa com o cliente contendo o resumo do serviço.
+                  Clique em <strong>"WhatsApp"</strong> para enviar diretamente ao telefone cadastrado do cliente, ou clique em <strong>"Encaminhar"</strong> para digitar outro número ou selecionar qualquer contato/grupo.
                 </p>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
                 <p className="font-bold text-slate-800">3. Anexar o PDF no WhatsApp:</p>
                 <p className="text-slate-600">
-                  Na conversa do WhatsApp, clique no ícone de clipe (<strong>📎 Anexo</strong>) &gt; <strong>Documento</strong> e selecione o PDF que você salvou.
+                  Na conversa do WhatsApp, clique no ícone de clipe (<strong>📎 Anexo</strong>) &gt; <strong>Documento</strong> e selecione o PDF gerado.
                 </p>
               </div>
             </div>
@@ -777,6 +846,130 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Encaminhar via WhatsApp */}
+      {forwardModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-xl space-y-4 border border-gray-100 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2.5 text-slate-900 font-extrabold">
+                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 leading-tight">Encaminhar por WhatsApp</h2>
+                  <p className="text-xs text-slate-500 font-normal">
+                    Serviço #{orderNumber || order.id.slice(0, 8)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setForwardModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {forwardError && (
+              <div className="flex items-start gap-2.5 p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs font-medium">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>{forwardError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleForwardToCustomPhone} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Número de Telefone (DDD + Número)
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="(00) 00000-0000"
+                    value={forwardPhone}
+                    onChange={(e) => {
+                      setForwardPhone(formatPhone(e.target.value, true));
+                      if (forwardError) setForwardError(null);
+                    }}
+                    className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm font-semibold focus:bg-white focus:border-emerald-500 transition-all outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Digite o número de quem receberá o detalhamento (ex: outro telefone do cliente, sócio, seguradora).
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Enviar para este Número
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForwardChooseContact}
+                  className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  title="Abre o WhatsApp para você escolher qualquer contato ou grupo na sua lista"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
+                  Escolher Contato no WhatsApp (sem número prévio)
+                </button>
+              </div>
+            </form>
+
+            {/* Prévia da Mensagem e Copiar */}
+            <div className="pt-3 border-t border-gray-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="text-xs font-bold text-sky-700 hover:text-sky-900 transition-colors cursor-pointer"
+                >
+                  {showPreview ? '▲ Ocultar prévia do texto' : '▼ Ver prévia do texto a enviar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyMessage}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Texto</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {showPreview && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">
+                  {buildWhatsAppMessage()}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setForwardModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
