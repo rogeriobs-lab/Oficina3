@@ -218,26 +218,45 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
 
   const buildWhatsAppMessage = useCallback(() => {
     if (!order) return '';
-    const numDisplay = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
+    const rawNum = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
+    const numDisplay = rawNum.startsWith('#') ? rawNum : `#${rawNum}`;
     const servs = order.order_items.filter((i) => i.item_type === 'servico');
     const pcs = order.order_items.filter((i) => i.item_type === 'peca');
+    const subtotalPecas = pcs.reduce((acc, item) => acc + Number(item.price), 0);
     const tot = order.order_items.reduce((acc, item) => acc + Number(item.price), 0);
 
-    let message = `*SERVIÇO Nº ${numDisplay}*\n`;
+    // Helper para alinhar valores à direita com pontos
+    const alignWithDots = (label: string, value: string, targetWidth = 34) => {
+      const diff = targetWidth - (label.length + value.length);
+      const dots = '.'.repeat(Math.max(3, diff));
+      return `${dots} ${value}`;
+    };
+
+    let message = `*ORDEM DE SERVIÇO Nº ${numDisplay}*\n\n`;
     message += `*Cliente:* ${order.clients?.name || 'Cliente'}\n`;
-    message += `*Veículo:* ${order.vehicles?.brand || ''} ${order.vehicles?.model || ''} (${order.vehicles?.plate || ''})\n`;
+    
+    const vehicleParts = [
+      order.vehicles?.brand,
+      order.vehicles?.model,
+      order.vehicles?.plate ? `- ${order.vehicles.plate}` : '',
+    ].filter(Boolean).join(' ');
+    
+    message += `*Veículo:* ${vehicleParts || 'Não informado'}\n`;
+    
     if (order.mileage !== null && order.mileage !== undefined && order.mileage !== 0) {
-      message += `*Quilometragem:* ${Number(order.mileage).toLocaleString('pt-BR')} km\n`;
+      message += `*KM:* ${Number(order.mileage).toLocaleString('pt-BR')} km\n`;
     } else if (order.mileage === 0) {
-      message += `*Quilometragem:* 0 km\n`;
+      message += `*KM:* 0 km\n`;
     }
+    
     message += `*Data:* ${formatDate(order.order_date)}\n\n`;
 
     if (servs.length > 0) {
-      message += `*Serviços (Mão de Obra):*\n`;
+      message += `*Serviços:*\n`;
       servs.forEach((s) => {
         const { title, details } = parseItemDescription(s.description);
-        message += `• *${title}*: ${formatCurrency(Number(s.price))}\n`;
+        const priceStr = formatCurrency(Number(s.price));
+        message += `• *${title}* ${alignWithDots(title, priceStr, 34)}\n`;
         if (details.length > 0) {
           details.forEach((d) => {
             message += `   - ${d}\n`;
@@ -250,12 +269,17 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     if (pcs.length > 0) {
       message += `*Peças:*\n`;
       pcs.forEach((p) => {
-        message += `• ${p.description}: ${formatCurrency(Number(p.price))}\n`;
+        const priceStr = formatCurrency(Number(p.price));
+        message += `• ${p.description} ${alignWithDots(p.description, priceStr, 34)}\n`;
       });
-      message += `\n`;
+      message += `───────────────────────────────\n`;
+      const subtotalPecasStr = formatCurrency(subtotalPecas);
+      message += `*Subtotal Peças:* ${alignWithDots('Subtotal Peças:', subtotalPecasStr, 34)}\n\n`;
     }
 
-    message += `*VALOR TOTAL: ${formatCurrency(tot)}*`;
+    message += `═══════════════════════════════\n`;
+    message += `*VALOR TOTAL: ${formatCurrency(tot)}*\n`;
+    message += `═══════════════════════════════`;
     return message;
   }, [order, orderNumber]);
 
