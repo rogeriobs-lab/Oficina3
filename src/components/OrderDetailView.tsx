@@ -259,7 +259,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
         message += `• *${title}* ${alignWithDots(title, priceStr, 34)}\n`;
         if (details.length > 0) {
           details.forEach((d) => {
-            message += `   - ${d}\n`;
+            message += `  • ${d}\n`;
           });
         }
       });
@@ -270,7 +270,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       message += `*Peças:*\n`;
       pcs.forEach((p) => {
         const priceStr = formatCurrency(Number(p.price));
-        message += `• ${p.description} ${alignWithDots(p.description, priceStr, 34)}\n`;
+        message += `  • ${p.description} ${alignWithDots(p.description, priceStr, 32)}\n`;
       });
       message += `───────────────────────────────\n`;
       const subtotalPecasStr = formatCurrency(subtotalPecas);
