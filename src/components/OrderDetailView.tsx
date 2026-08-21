@@ -258,7 +258,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       servs.forEach((s) => {
         const { title, details } = parseItemDescription(s.description);
         const priceStr = formatCurrency(Number(s.price));
-        message += `• *${title}* — *${priceStr}*\n`;
+        message += `• *${title}*\n  Valor: *${priceStr}*\n`;
         if (details.length > 0) {
           details.forEach((d) => {
             message += `  • ${d}\n`;
@@ -272,16 +272,15 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       message += `*Peças:*\n`;
       pcs.forEach((p) => {
         const priceStr = formatCurrency(Number(p.price));
-        message += `  • ${p.description} — *${priceStr}*\n`;
+        message += `• ${p.description}\n  Valor: *${priceStr}*\n\n`;
       });
-      message += `──────────────────────\n`;
       const subtotalPecasStr = formatCurrency(subtotalPecas);
-      message += `*Subtotal Peças: ${subtotalPecasStr}*\n\n`;
+      message += `*Subtotal Peças: ${subtotalPecasStr}*\n`;
     }
 
-    message += `══════════════════════\n`;
+    message += `━━━━━━━━━━━━━━\n`;
     message += `*VALOR TOTAL: ${formatCurrency(tot)}*\n`;
-    message += `══════════════════════`;
+    message += `━━━━━━━━━━━━━━`;
     return message;
   }, [order, orderNumber]);
 
