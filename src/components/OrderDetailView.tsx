@@ -230,7 +230,8 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     
     // Tratamento limpo para os dados do veículo evitando repetições
     const brand = (order.vehicles?.brand || '').trim();
-    const model = (order.vehicles?.model || '').trim();
+    const rawModel = (order.vehicles?.model || '').trim();
+    const model = rawModel.replace(/^ve[íi]culo\s+/i, '');
     const plate = (order.vehicles?.plate || '').trim();
 
     let vehicleText = '';
@@ -258,7 +259,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       servs.forEach((s) => {
         const { title, details } = parseItemDescription(s.description);
         const priceStr = formatCurrency(Number(s.price));
-        message += `• *${title}*\n  Valor: *${priceStr}*\n`;
+        message += `• *${title}:* ${priceStr}\n`;
         if (details.length > 0) {
           details.forEach((d) => {
             message += `  • ${d}\n`;
@@ -272,10 +273,10 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       message += `*Peças:*\n`;
       pcs.forEach((p) => {
         const priceStr = formatCurrency(Number(p.price));
-        message += `• ${p.description}\n  Valor: *${priceStr}*\n\n`;
+        message += `• ${p.description}: ${priceStr}\n`;
       });
       const subtotalPecasStr = formatCurrency(subtotalPecas);
-      message += `*Subtotal Peças: ${subtotalPecasStr}*\n`;
+      message += `\n*Subtotal Peças:* ${subtotalPecasStr}\n`;
     }
 
     message += `━━━━━━━━━━━━━━\n`;
