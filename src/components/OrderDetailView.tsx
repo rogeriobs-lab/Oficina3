@@ -259,7 +259,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       servs.forEach((s) => {
         const { title, details } = parseItemDescription(s.description);
         const priceStr = formatCurrency(Number(s.price));
-        message += `• *${title}* - ${priceStr}\n`;
+        message += `• *${title}*\n  ${priceStr}\n`;
         if (details.length > 0) {
           details.forEach((d) => {
             message += `  • ${d}\n`;
@@ -273,7 +273,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       message += `*Peças:*\n`;
       pcs.forEach((p) => {
         const priceStr = formatCurrency(Number(p.price));
-        message += `• ${p.description} - ${priceStr}\n`;
+        message += `• ${p.description}\n  ${priceStr}\n`;
       });
       const subtotalPecasStr = formatCurrency(subtotalPecas);
       message += `\n*Subtotal Peças:* ${subtotalPecasStr}\n`;
