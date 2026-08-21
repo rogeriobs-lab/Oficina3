@@ -225,23 +225,25 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     const subtotalPecas = pcs.reduce((acc, item) => acc + Number(item.price), 0);
     const tot = order.order_items.reduce((acc, item) => acc + Number(item.price), 0);
 
-    // Helper para alinhar valores à direita com pontos
-    const alignWithDots = (label: string, value: string, targetWidth = 34) => {
-      const diff = targetWidth - (label.length + value.length);
-      const dots = '.'.repeat(Math.max(3, diff));
-      return `${dots} ${value}`;
-    };
-
     let message = `*ORDEM DE SERVIÇO Nº ${numDisplay}*\n\n`;
     message += `*Cliente:* ${order.clients?.name || 'Cliente'}\n`;
     
-    const vehicleParts = [
-      order.vehicles?.brand,
-      order.vehicles?.model,
-      order.vehicles?.plate ? `- ${order.vehicles.plate}` : '',
-    ].filter(Boolean).join(' ');
+    // Tratamento limpo para os dados do veículo evitando repetições
+    const brand = (order.vehicles?.brand || '').trim();
+    const model = (order.vehicles?.model || '').trim();
+    const plate = (order.vehicles?.plate || '').trim();
+
+    let vehicleText = '';
+    if (brand && model) {
+      vehicleText = `${brand} ${model}`;
+    } else {
+      vehicleText = brand || model || 'Não informado';
+    }
+    if (plate) {
+      vehicleText += ` (${plate})`;
+    }
     
-    message += `*Veículo:* ${vehicleParts || 'Não informado'}\n`;
+    message += `*Veículo:* ${vehicleText}\n`;
     
     if (order.mileage !== null && order.mileage !== undefined && order.mileage !== 0) {
       message += `*KM:* ${Number(order.mileage).toLocaleString('pt-BR')} km\n`;
@@ -256,7 +258,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       servs.forEach((s) => {
         const { title, details } = parseItemDescription(s.description);
         const priceStr = formatCurrency(Number(s.price));
-        message += `• *${title}* ${alignWithDots(title, priceStr, 34)}\n`;
+        message += `• *${title}* — *${priceStr}*\n`;
         if (details.length > 0) {
           details.forEach((d) => {
             message += `  • ${d}\n`;
@@ -270,16 +272,16 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       message += `*Peças:*\n`;
       pcs.forEach((p) => {
         const priceStr = formatCurrency(Number(p.price));
-        message += `  • ${p.description} ${alignWithDots(p.description, priceStr, 32)}\n`;
+        message += `  • ${p.description} — *${priceStr}*\n`;
       });
-      message += `───────────────────────────────\n`;
+      message += `──────────────────────\n`;
       const subtotalPecasStr = formatCurrency(subtotalPecas);
-      message += `*Subtotal Peças:* ${alignWithDots('Subtotal Peças:', subtotalPecasStr, 34)}\n\n`;
+      message += `*Subtotal Peças: ${subtotalPecasStr}*\n\n`;
     }
 
-    message += `═══════════════════════════════\n`;
+    message += `══════════════════════\n`;
     message += `*VALOR TOTAL: ${formatCurrency(tot)}*\n`;
-    message += `═══════════════════════════════`;
+    message += `══════════════════════`;
     return message;
   }, [order, orderNumber]);
 
