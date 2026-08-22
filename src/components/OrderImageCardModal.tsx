@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { generateOrderImageBlob } from '@/src/lib/orderImageUtils';
+import {
+  generateOrderImageBlob,
+  copyOrderImageToClipboard,
+  downloadOrderImageFile,
+  sendOrderImageToWhatsApp,
+  shareOrderImageNatively,
+} from '@/src/lib/orderImageUtils';
 import {
   X,
   Share2,
@@ -41,6 +47,19 @@ export const OrderImageCardModal: React.FC<OrderImageCardModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [canNativeShare, setCanNativeShare] = useState(false);
+
+  // Verifica suporte a compartilhamento nativo de arquivo (Mobile)
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.canShare) {
+      try {
+        const dummyFile = new File([''], 'test.png', { type: 'image/png' });
+        setCanNativeShare(navigator.canShare({ files: [dummyFile] }));
+      } catch {
+        setCanNativeShare(false);
+      }
+    }
+  }, []);
 
   // Gera a imagem ao abrir o modal
   useEffect(() => {
@@ -76,95 +95,64 @@ export const OrderImageCardModal: React.FC<OrderImageCardModalProps> = ({
 
   if (!isOpen || !order) return null;
 
-  const numDisplay = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
+  const numDisplay = orderNumber ? orderNumber.toUpperCase() : (order.id ? order.id.slice(0, 8).toUpperCase() : '');
   const plate = (order?.vehicles?.plate || '').trim();
   const vehicleDisplay = `${order?.vehicles?.brand || ''} ${order?.vehicles?.model || ''}`.trim() || 'Veículo';
+  const clientPhone = order.clients?.phone ? order.clients.phone.replace(/\D/g, '') : '';
+  const clientName = order.clients?.name || 'Cliente';
 
-  // Obter Blob da imagem
-  const getImageBlob = async (): Promise<Blob | null> => {
-    if (blobCache) return blobCache;
-    return await generateOrderImageBlob(order, orderNumber);
-  };
-
-  // 1. Compartilhar Direto no WhatsApp (Mobile / Web Share API)
+  // 1. Compartilhar Direto no WhatsApp (Mobile ou Cópia + Abertura Web)
   const handleShareWhatsApp = async () => {
     try {
-      setGenerating(true);
-      const blob = await getImageBlob();
-      if (!blob) throw new Error('Falha ao gerar arquivo da imagem');
-
-      const fileName = `OS_${numDisplay}_${order.clients?.name?.replace(/\s+/g, '_') || 'cliente'}.png`;
-      const file = new File([blob], fileName, { type: 'image/png' });
-
-      // Se o navegador suportar compartilhamento de arquivo (Android / iOS / Chrome)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-        });
-        setShareSuccess(true);
-        setTimeout(() => setShareSuccess(false), 3000);
-      } else {
-        // Fallback: Baixar a imagem e orientar o envio
-        handleDownloadImage();
-        setErrorMessage('Seu navegador não suporta compartilhamento direto de imagem. A imagem foi baixada! Basta anexá-la como foto no WhatsApp.');
+      setErrorMessage(null);
+      // Se for celular / navegador com Web Share nativo de arquivos
+      if (canNativeShare) {
+        const res = await shareOrderImageNatively(order, orderNumber);
+        if (res.success) {
+          setShareSuccess(true);
+          setTimeout(() => setShareSuccess(false), 4000);
+          return;
+        }
       }
+
+      // No computador / WhatsApp Web: copia a foto e abre o WhatsApp na conversa do cliente
+      const res = await sendOrderImageToWhatsApp(order, orderNumber, clientPhone);
+      setShareSuccess(true);
+      setTimeout(() => setShareSuccess(false), 4000);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error('Erro ao compartilhar:', err);
-        handleDownloadImage();
+        setErrorMessage('Não foi possível abrir o compartilhamento. Você pode baixar a imagem abaixo.');
       }
-    } finally {
-      setGenerating(false);
     }
   };
 
-  // 2. Copiar Imagem para a Área de Transferência (Para colar no WhatsApp Web com Ctrl+V)
+  // 2. Copiar Imagem para a Área de Transferência
   const handleCopyImage = async () => {
     try {
-      setGenerating(true);
-      const blob = await getImageBlob();
-      if (!blob) throw new Error('Falha ao gerar blob');
-
-      if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'image/png': blob,
-          }),
-        ]);
+      const success = await copyOrderImageToClipboard(order, orderNumber);
+      if (success) {
         setCopied(true);
+        setErrorMessage(null);
         setTimeout(() => setCopied(false), 3000);
       } else {
-        throw new Error('Área de transferência não suportada');
+        setErrorMessage('Não foi possível copiar diretamente para a área de transferência. Use o botão "Baixar Foto" para salvar o arquivo.');
       }
     } catch (err: any) {
       console.error('Erro ao copiar imagem:', err);
-      // Fallback para download
-      handleDownloadImage();
-      setErrorMessage('Não foi possível copiar diretamente. A imagem foi salva em Downloads!');
-    } finally {
-      setGenerating(false);
+      setErrorMessage('Não foi possível gravar na área de transferência. Use o botão "Baixar Foto".');
     }
   };
 
   // 3. Baixar Imagem PNG
-  const handleDownloadImage = async () => {
+  const handleDownloadImage = () => {
     try {
-      setGenerating(true);
-      const blob = await getImageBlob();
-      if (!blob) return;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `OS_${numDisplay}_${plate || 'servico'}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const ok = downloadOrderImageFile(order, orderNumber);
+      if (!ok) {
+        setErrorMessage('Não foi possível realizar o download.');
+      }
     } catch (err) {
       console.error('Erro ao baixar imagem:', err);
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -179,10 +167,10 @@ export const OrderImageCardModal: React.FC<OrderImageCardModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-                Orçamento em Imagem (Para WhatsApp)
+                Foto do Orçamento (WhatsApp)
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                Formato foto otimizado para abrir direto na tela do celular sem dar zoom
+                Imagem em alta resolução com visual moderno para visualização no celular
               </p>
             </div>
           </div>
@@ -203,15 +191,15 @@ export const OrderImageCardModal: React.FC<OrderImageCardModalProps> = ({
         )}
 
         {/* Área de Visualização */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-100 flex flex-col items-center justify-center min-h-[360px]">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-100 flex flex-col items-center justify-center min-h-[340px]">
           {generating && !previewDataUrl ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-3">
               <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-              <p className="text-sm font-bold text-slate-700">Gerando imagem em alta resolução...</p>
-              <p className="text-xs text-slate-400">Otimizando fontes e contraste para telas de celular</p>
+              <p className="text-sm font-bold text-slate-700">Gerando imagem da OS...</p>
+              <p className="text-xs text-slate-400">Formatando dados e itens da ordem</p>
             </div>
           ) : previewDataUrl ? (
-            <div className="w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border border-slate-300 bg-white">
+            <div className="w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border border-slate-300 bg-white group relative">
               <img
                 src={previewDataUrl}
                 alt="Prévia da Ordem de Serviço"
@@ -224,41 +212,42 @@ export const OrderImageCardModal: React.FC<OrderImageCardModalProps> = ({
         {/* Botões de Ação */}
         <div className="p-4 sm:p-5 border-t border-gray-100 bg-white space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-            {/* 1. WhatsApp / Compartilhar */}
+            {/* 1. Abrir WhatsApp / Compartilhar */}
             <button
               onClick={handleShareWhatsApp}
               disabled={generating}
               className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+              title="Abre a conversa no WhatsApp e copia a foto para colar (Ctrl+V)"
             >
               {shareSuccess ? (
                 <>
-                  <Check className="w-4 h-4" />
-                  <span>Enviado!</span>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>WhatsApp Aberto!</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  <span>WhatsApp (Foto)</span>
+                  <span>{canNativeShare ? 'Enviar Foto no WhatsApp' : 'Abrir WhatsApp'}</span>
                 </>
               )}
             </button>
 
-            {/* 2. Copiar Imagem (Para colar no WhatsApp Web com Ctrl+V) */}
+            {/* 2. Copiar Foto para a Área de Transferência */}
             <button
               onClick={handleCopyImage}
               disabled={generating}
               className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
-              title="Copia a imagem para você só dar Ctrl + V na conversa do WhatsApp Web"
+              title="Copia a imagem para você colar com Ctrl + V no WhatsApp"
             >
               {copied ? (
                 <>
                   <Check className="w-4 h-4 text-emerald-400" />
-                  <span className="text-emerald-400">Imagem Copiada!</span>
+                  <span className="text-emerald-400">Foto Copiada!</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-4 h-4" />
-                  <span>Copiar Imagem (Ctrl+V)</span>
+                  <span>Copiar Foto (Ctrl+V)</span>
                 </>
               )}
             </button>
@@ -268,19 +257,20 @@ export const OrderImageCardModal: React.FC<OrderImageCardModalProps> = ({
               onClick={handleDownloadImage}
               disabled={generating}
               className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs sm:text-sm border border-slate-200 transition-all cursor-pointer flex items-center justify-center gap-2"
+              title="Salva o arquivo PNG no seu computador"
             >
               <Download className="w-4 h-4 text-slate-600" />
-              <span>Baixar Imagem</span>
+              <span>Baixar Foto (PNG)</span>
             </button>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-            <span className="flex items-center gap-1">
-              💡 <strong>Dica WhatsApp Web:</strong> Clique em <em>"Copiar Imagem"</em> e aperte <strong>Ctrl+V</strong> no WhatsApp.
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-500 gap-2 pt-1">
+            <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+              💡 <strong>Como funciona no WhatsApp Web:</strong> A foto é copiada para sua Área de Transferência. Ao abrir o WhatsApp, basta dar <strong>Ctrl + V</strong> ou arrastar o arquivo baixado.
             </span>
             <button
               onClick={onClose}
-              className="font-bold text-slate-600 hover:text-slate-900 cursor-pointer px-2 py-1"
+              className="self-end sm:self-auto font-bold text-slate-600 hover:text-slate-900 cursor-pointer px-2 py-1"
             >
               Fechar
             </button>

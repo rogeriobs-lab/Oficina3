@@ -69,9 +69,25 @@ function wrapText(
 }
 
 /**
- * Renderiza a Ordem de Serviço em um Canvas 2D com tipografia EXTRA GRANDE para visualização imediata no celular
+ * Converte dataURL base64 para Blob de forma 100% síncrona
  */
-export async function generateOrderImageBlob(order: any, orderNumber: string): Promise<Blob | null> {
+export function dataURLtoBlob(dataurl: string): Blob {
+  const arr = dataurl.split(',');
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+/**
+ * Renderiza a Ordem de Serviço em um Canvas 2D de forma 100% síncrona
+ */
+export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLCanvasElement | null {
   if (!order) return null;
 
   const workshopName = (localStorage.getItem('workshop_name') || 'AUTO MECÂNICA').toUpperCase();
@@ -459,24 +475,36 @@ export async function generateOrderImageBlob(order: any, orderNumber: string): P
   ctx.font = '800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   ctx.fillText('DOCUMENTO EMITIDO ELETRONICAMENTE', width / 2, curY + 6);
 
-  return new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((blob) => {
-      resolve(blob);
-    }, 'image/png', 0.98);
-  });
+  return canvas;
 }
 
 /**
- * Envia/abre WhatsApp para envio da imagem da OS (apenas a foto, sem texto adicional)
- * - Em Celulares (Android / iOS): Utiliza a Web Share API para anexar a foto diretamente no WhatsApp
- * - No Computador (WhatsApp Web): Copia a foto para o Clipboard (Ctrl+V) e abre a conversa
+ * Retorna o Blob PNG da OS de forma 100% síncrona
  */
-export async function sendOrderImageToWhatsApp(
+export function generateOrderImageBlobSync(order: any, orderNumber: string): Blob | null {
+  const canvas = generateOrderImageCanvas(order, orderNumber);
+  if (!canvas) return null;
+  const dataUrl = canvas.toDataURL('image/png');
+  return dataURLtoBlob(dataUrl);
+}
+
+/**
+ * Retorna o Blob PNG da OS (compatibilidade assíncrona)
+ */
+export async function generateOrderImageBlob(order: any, orderNumber: string): Promise<Blob | null> {
+  return generateOrderImageBlobSync(order, orderNumber);
+}
+
+/**
+ * Compartilha a foto da OS usando a janela nativa de compartilhamento (Web Share API)
+ * No Windows/Android/iOS, ao escolher o WhatsApp, o app abre diretamente a seleção de contatos
+ * do WhatsApp com foto de perfil e anexa a imagem automaticamente.
+ */
+export async function shareOrderImageNatively(
   order: any,
-  orderNumber: string,
-  targetPhone?: string
-): Promise<{ copied: boolean; sharedDirectly: boolean }> {
-  const blob = await generateOrderImageBlob(order, orderNumber);
+  orderNumber: string
+): Promise<{ success: boolean; error?: string }> {
+  const blob = generateOrderImageBlobSync(order, orderNumber);
   if (!blob) {
     throw new Error('Não foi possível gerar a foto da Ordem de Serviço');
   }
@@ -486,51 +514,159 @@ export async function sendOrderImageToWhatsApp(
   const fileName = `OS_${numDisplay}_${clientName}.png`;
   const file = new File([blob], fileName, { type: 'image/png' });
 
-  // 1. Sempre tentar compartilhar o arquivo nativamente no celular (Android / iOS) - SEM texto extra
   if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         files: [file],
+        title: `OS #${numDisplay}`,
       });
-      return { copied: false, sharedDirectly: true };
+      return { success: true };
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        return { copied: false, sharedDirectly: false };
+        return { success: false, error: 'Compartilhamento cancelado' };
       }
+      throw err;
     }
   }
 
-  // 2. Fallback (Desktop / PC / Navegadores sem suporte a Web Share de arquivo)
-  let wasCopied = false;
+  // Se o navegador não suportar compartilhamento de arquivos nativo
+  throw new Error('Seu navegador não suporta compartilhamento direto de arquivos. Use o envio por número ou copie a foto.');
+}
+
+/**
+ * Copia um Blob de imagem para a Área de Transferência com suporte completo a navegadores modernos
+ */
+export async function copyBlobToClipboard(blob: Blob): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) {
+    return false;
+  }
+
+  // Método 1: ClipboardItem com Blob nativo
   try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window.ClipboardItem !== 'undefined') {
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob }),
-      ]);
-      wasCopied = true;
+    if (typeof window.ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({ [blob.type || 'image/png']: blob });
+      await navigator.clipboard.write([item]);
+      return true;
     }
-  } catch (e) {
-    console.log('Clipboard write not allowed or failed:', e);
+  } catch (err1) {
+    console.warn('Tentativa 1 de cópia de blob para clipboard:', err1);
   }
 
-  // 3. Baixar arquivo da foto no computador
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  // Método 2: ClipboardItem com Promise de Blob (padrão Chromium)
+  try {
+    if (typeof window.ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({
+        [blob.type || 'image/png']: Promise.resolve(blob),
+      });
+      await navigator.clipboard.write([item]);
+      return true;
+    }
+  } catch (err2) {
+    console.warn('Tentativa 2 de cópia de blob para clipboard:', err2);
+  }
 
-  // 4. Abrir conversa no WhatsApp Web / App (apenas abrindo o chat, sem mensagem de texto)
+  return false;
+}
+
+/**
+ * Faz o download do arquivo de imagem PNG da Ordem de Serviço de forma direta e segura
+ */
+export function downloadOrderImageFile(order: any, orderNumber: string): boolean {
+  try {
+    const blob = generateOrderImageBlobSync(order, orderNumber);
+    if (!blob) return false;
+    const numDisplay = orderNumber ? orderNumber.toUpperCase() : (order?.id ? order.id.slice(0, 8).toUpperCase() : 'OS');
+    const clientName = (order?.clients?.name || 'cliente').replace(/\s+/g, '_');
+    const fileName = `OS_${numDisplay}_${clientName}.png`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
+  } catch (err) {
+    console.error('Falha ao baixar imagem:', err);
+    return false;
+  }
+}
+
+/**
+ * Copia a imagem da OS diretamente para a Área de Transferência (Clipboard)
+ */
+export async function copyOrderImageToClipboard(order: any, orderNumber: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+    return false;
+  }
+
+  try {
+    if (typeof window !== 'undefined' && window.focus) {
+      window.focus();
+    }
+  } catch {}
+
+  // 1. Gera o Blob PNG síncrono da imagem em alta resolução
+  const blob = generateOrderImageBlobSync(order, orderNumber);
+  if (!blob) return false;
+
+  // Método 1: new ClipboardItem com Blob direto
+  try {
+    if (typeof window.ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({ 'image/png': blob });
+      await navigator.clipboard.write([item]);
+      return true;
+    }
+  } catch (err1) {
+    console.warn('Tentativa 1 (ClipboardItem com Blob) falhou:', err1);
+  }
+
+  // Método 2: new ClipboardItem com Promise de Blob (requerido em algumas versões do Chrome)
+  try {
+    if (typeof window.ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({
+        'image/png': Promise.resolve(blob),
+      });
+      await navigator.clipboard.write([item]);
+      return true;
+    }
+  } catch (err2) {
+    console.warn('Tentativa 2 (ClipboardItem com Promise) falhou:', err2);
+  }
+
+  return false;
+}
+
+/**
+ * Envia/abre WhatsApp para envio da imagem da OS para um número específico
+ * - Copia a foto para o Clipboard (Ctrl+V) de forma síncrona
+ * - Abre a conversa do WhatsApp sem texto na barra de digitação para que a foto seja colada
+ */
+export async function sendOrderImageToWhatsApp(
+  order: any,
+  orderNumber: string,
+  targetPhone?: string,
+  captionText?: string
+): Promise<{ copied: boolean; downloaded: boolean; sharedDirectly: boolean }> {
+  // 1. Copia a imagem da OS para o clipboard imediatamente
+  let copied = false;
+  try {
+    copied = await copyOrderImageToClipboard(order, orderNumber);
+  } catch (e) {
+    console.warn('Erro ao copiar imagem para o clipboard:', e);
+  }
+
+  // 2. Abre o WhatsApp diretamente na conversa do número informado
   const cleanPhone = targetPhone ? targetPhone.replace(/\D/g, '') : '';
   const formattedPhone = cleanPhone ? (cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`) : '';
 
-  const waUrl = formattedPhone
-    ? `https://wa.me/${formattedPhone}`
-    : `https://wa.me/`;
+  let waUrl = formattedPhone ? `https://wa.me/${formattedPhone}` : `https://wa.me/`;
+  if (captionText) {
+    waUrl += (waUrl.includes('?') ? '&' : '?') + `text=${encodeURIComponent(captionText)}`;
+  }
 
   window.open(waUrl, '_blank');
-  return { copied: wasCopied, sharedDirectly: false };
+  return { copied, downloaded: false, sharedDirectly: false };
 }
