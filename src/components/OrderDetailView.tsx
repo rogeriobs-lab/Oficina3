@@ -5,6 +5,7 @@ import { getSingleOrderNumber } from '@/src/lib/orderUtils';
 import { formatItemDescription, parseItemDescription } from '@/src/lib/serviceItemUtils';
 import { LoadingState, ErrorState } from './States';
 import { exportOrderToPdf } from '@/src/lib/exportPdf';
+import { sendOrderImageToWhatsApp } from '@/src/lib/orderImageUtils';
 import {
   ArrowLeft,
   User,
@@ -27,6 +28,8 @@ import {
   CheckCheck,
   Phone,
   MessageSquare,
+  Image as ImageIcon,
+  CheckCircle2,
 } from 'lucide-react';
 
 type OrderDetail = {
@@ -63,9 +66,12 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
   const [deleting, setDeleting] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [forwardModalOpen, setForwardModalOpen] = useState(false);
+  const [forwardFormat, setForwardFormat] = useState<'photo' | 'text'>('photo');
   const [forwardPhone, setForwardPhone] = useState('');
   const [forwardError, setForwardError] = useState<string | null>(null);
+  const [forwardSending, setForwardSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [photoToast, setPhotoToast] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
   const loadOrder = useCallback(async () => {
@@ -301,7 +307,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     window.open(waUrl, '_blank');
   };
 
-  const handleForwardToCustomPhone = (e?: React.FormEvent) => {
+  const handleForwardToCustomPhone = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!order) return;
     const cleanDigits = forwardPhone.replace(/\D/g, '');
@@ -309,6 +315,27 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
       setForwardError('Informe um telefone válido com DDD (mínimo 10 dígitos)');
       return;
     }
+
+    if (forwardFormat === 'photo') {
+      try {
+        setForwardSending(true);
+        setForwardError(null);
+        const res = await sendOrderImageToWhatsApp(order, orderNumber, cleanDigits);
+        setForwardModalOpen(false);
+        if (res.sharedDirectly) {
+          setPhotoToast('Foto enviada via WhatsApp!');
+        } else {
+          setPhotoToast('Foto gerada e salva! No WhatsApp, basta colar (Ctrl + V) ou anexar o arquivo baixado.');
+        }
+        setTimeout(() => setPhotoToast(null), 6000);
+      } catch (err: any) {
+        setForwardError(err.message || 'Erro ao enviar foto');
+      } finally {
+        setForwardSending(false);
+      }
+      return;
+    }
+
     const formattedPhone = cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`;
     const message = buildWhatsAppMessage();
     const waUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
@@ -316,8 +343,29 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
     setForwardModalOpen(false);
   };
 
-  const handleForwardChooseContact = () => {
+  const handleForwardChooseContact = async () => {
     if (!order) return;
+
+    if (forwardFormat === 'photo') {
+      try {
+        setForwardSending(true);
+        setForwardError(null);
+        const res = await sendOrderImageToWhatsApp(order, orderNumber);
+        setForwardModalOpen(false);
+        if (res.sharedDirectly) {
+          setPhotoToast('Foto enviada via WhatsApp!');
+        } else {
+          setPhotoToast('Foto gerada e salva! No WhatsApp, basta colar (Ctrl + V) ou anexar o arquivo baixado.');
+        }
+        setTimeout(() => setPhotoToast(null), 6000);
+      } catch (err: any) {
+        setForwardError(err.message || 'Erro ao enviar foto');
+      } finally {
+        setForwardSending(false);
+      }
+      return;
+    }
+
     const message = buildWhatsAppMessage();
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
@@ -379,40 +427,36 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
 
         {/* Header Actions - Compact and Responsive */}
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          {!isOpen && (
-            <>
-              <button
-                onClick={() => exportOrderToPdf(order, orderNumber)}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white hover:bg-slate-50 text-sky-700 text-xs sm:text-sm font-bold rounded-xl border border-sky-200 shadow-2xs transition-all cursor-pointer"
-                title="Gerar e salvar orçamento em PDF"
-              >
-                <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-600 shrink-0" />
-                <span>PDF</span>
-              </button>
+          <button
+            onClick={() => exportOrderToPdf(order, orderNumber)}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white hover:bg-slate-50 text-sky-700 text-xs sm:text-sm font-bold rounded-xl border border-sky-200 shadow-2xs transition-all cursor-pointer"
+            title="Gerar e salvar orçamento em PDF"
+          >
+            <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-600 shrink-0" />
+            <span>PDF</span>
+          </button>
 
-              <button
-                onClick={handleShareClientWhatsApp}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
-                title={order.clients?.phone ? `Enviar para o cliente (${formatPhone(order.clients.phone)})` : 'Enviar WhatsApp para cliente'}
-              >
-                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                <span>WhatsApp</span>
-              </button>
+          <button
+            onClick={handleShareClientWhatsApp}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
+            title={order.clients?.phone ? `Enviar para o cliente (${formatPhone(order.clients.phone)})` : 'Enviar WhatsApp para cliente'}
+          >
+            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>WhatsApp</span>
+          </button>
 
-              <button
-                onClick={() => {
-                  setForwardPhone('');
-                  setForwardError(null);
-                  setForwardModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs sm:text-sm font-bold rounded-xl border border-emerald-200 shadow-2xs transition-all cursor-pointer"
-                title="Encaminhar discriminação para outro telefone ou contato"
-              >
-                <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
-                <span>Encaminhar</span>
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => {
+              setForwardPhone('');
+              setForwardError(null);
+              setForwardModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs sm:text-sm font-bold rounded-xl border border-emerald-200 shadow-2xs transition-all cursor-pointer"
+            title="Encaminhar orçamento (escolher Foto ou Texto)"
+          >
+            <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
+            <span>Encaminhar</span>
+          </button>
 
           <button
             onClick={handleToggleStatus}
@@ -444,7 +488,7 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2 text-sky-800 font-extrabold text-sm">
                 <HelpCircle className="w-5 h-5 text-sky-600" />
-                <span>Como encaminhar PDF e resumo</span>
+                <span>Como enviar Orçamento ao Cliente</span>
               </div>
               <button
                 onClick={() => setShowHelpModal(false)}
@@ -455,24 +499,27 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
             </div>
 
             <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                <p className="font-bold text-slate-800">1. Gerar o arquivo PDF:</p>
-                <p className="text-slate-600">
-                  Clique no botão <strong>"PDF"</strong> e selecione a opção <strong>"Salvar como PDF"</strong> no seu computador ou celular.
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200/80 space-y-1">
+                <p className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-emerald-700" />
+                  <span>1. Foto WhatsApp (Recomendado):</span>
                 </p>
-              </div>
-
-              <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-1">
-                <p className="font-bold text-emerald-900">2. Enviar por WhatsApp:</p>
                 <p className="text-emerald-800">
-                  Clique em <strong>"WhatsApp"</strong> para enviar diretamente ao telefone cadastrado do cliente, ou clique em <strong>"Encaminhar"</strong> para digitar outro número ou selecionar qualquer contato/grupo.
+                  Clique em <strong>"Foto WhatsApp"</strong>. Gera uma imagem em alta definição formatada sob medida para telas de celular, sem necessidade do cliente baixar PDF ou dar zoom. No PC, você pode apenas clicar em <strong>"Copiar Imagem"</strong> e dar <strong>Ctrl+V</strong> no WhatsApp!
                 </p>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                <p className="font-bold text-slate-800">3. Anexar o PDF no WhatsApp:</p>
+                <p className="font-bold text-slate-800">2. Enviar como Texto:</p>
                 <p className="text-slate-600">
-                  Na conversa do WhatsApp, clique no ícone de clipe (<strong>📎 Anexo</strong>) &gt; <strong>Documento</strong> e selecione o PDF gerado.
+                  Clique em <strong>"WhatsApp Texto"</strong> ou <strong>"Encaminhar"</strong> para enviar a mensagem de texto com todos os serviços e peças discriminados.
+                </p>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                <p className="font-bold text-slate-800">3. Arquivo PDF A4:</p>
+                <p className="text-slate-600">
+                  Clique em <strong>"PDF"</strong> para imprimir ou salvar o documento formal em formato A4.
                 </p>
               </div>
             </div>
@@ -876,115 +923,207 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
         </div>
       )}
 
-      {/* Modal de Encaminhar via WhatsApp */}
+      {/* Modal de Encaminhar via WhatsApp (com escolha de Foto ou Texto) */}
       {forwardModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-xl space-y-4 border border-gray-100 relative max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2.5 text-slate-900 font-extrabold">
-                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 border border-gray-100 relative max-h-[92vh] overflow-y-auto">
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3.5">
+              <div className="flex items-center gap-3 text-slate-900 font-extrabold">
+                <div className="p-2.5 bg-emerald-100 text-emerald-800 rounded-2xl">
                   <Share2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-900 leading-tight">Encaminhar por WhatsApp</h2>
-                  <p className="text-xs text-slate-500 font-normal">
-                    Serviço #{orderNumber || order.id.slice(0, 8)}
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                    Encaminhar Orçamento
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Serviço #{orderNumber || order.id.slice(0, 8)} • Escolha como deseja enviar
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setForwardModalOpen(false)}
-                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {forwardError && (
-              <div className="flex items-start gap-2.5 p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs font-medium">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>{forwardError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleForwardToCustomPhone} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Número de Telefone (DDD + Número)
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    autoFocus
-                    placeholder="(00) 00000-0000"
-                    value={forwardPhone}
-                    onChange={(e) => {
-                      setForwardPhone(formatPhone(e.target.value, true));
-                      if (forwardError) setForwardError(null);
-                    }}
-                    className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm font-semibold focus:bg-white focus:border-emerald-500 transition-all outline-none"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Digite o número de quem receberá o detalhamento (ex: outro telefone do cliente, sócio, seguradora).
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2 pt-1">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  Enviar para este Número
-                </button>
+            {/* SELEÇÃO DE FORMATO: FOTO OU TEXTO */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                1. Escolha o Formato:
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Caixa de Seleção: Foto */}
                 <button
                   type="button"
-                  onClick={handleForwardChooseContact}
-                  className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  title="Abre o WhatsApp para você escolher qualquer contato ou grupo na sua lista"
+                  onClick={() => setForwardFormat('photo')}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                    forwardFormat === 'photo'
+                      ? 'border-emerald-600 bg-emerald-50/80 shadow-xs'
+                      : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100/80 text-slate-600'
+                  }`}
                 >
-                  <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
-                  Escolher Contato no WhatsApp (sem número prévio)
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`p-1.5 rounded-lg ${
+                          forwardFormat === 'photo'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                      <span
+                        className={`text-sm font-extrabold ${
+                          forwardFormat === 'photo' ? 'text-emerald-950' : 'text-slate-700'
+                        }`}
+                      >
+                        Foto
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        forwardFormat === 'photo'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      Recomendado
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Imagem HD para celular sem zoom
+                  </p>
                 </button>
-              </div>
-            </form>
 
-            {/* Prévia da Mensagem e Copiar */}
-            <div className="pt-3 border-t border-gray-100 space-y-2">
-              <div className="flex items-center justify-between">
+                {/* Caixa de Seleção: Texto */}
                 <button
                   type="button"
-                  onClick={() => setShowPreview(!showPreview)}
-                  className="text-xs font-bold text-sky-700 hover:text-sky-900 transition-colors cursor-pointer"
+                  onClick={() => setForwardFormat('text')}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                    forwardFormat === 'text'
+                      ? 'border-emerald-600 bg-emerald-50/80 shadow-xs'
+                      : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100/80 text-slate-600'
+                  }`}
                 >
-                  {showPreview ? '▲ Ocultar prévia do texto' : '▼ Ver prévia do texto a enviar'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCopyMessage}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                >
-                  {copied ? (
-                    <>
-                      <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="text-emerald-700 font-bold">Copiado!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copiar Texto</span>
-                    </>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`p-1.5 rounded-lg ${
+                          forwardFormat === 'text'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <span
+                        className={`text-sm font-extrabold ${
+                          forwardFormat === 'text' ? 'text-emerald-950' : 'text-slate-700'
+                        }`}
+                      >
+                        Texto
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Mensagem de texto discriminada
+                  </p>
                 </button>
               </div>
 
-              {showPreview && (
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">
-                  {buildWhatsAppMessage()}
+              {forwardFormat === 'photo' && (
+                <div className="p-2.5 bg-emerald-50/90 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 leading-relaxed space-y-1 mt-1">
+                  <div className="font-bold flex items-center gap-1.5 text-emerald-950">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Envio da Foto Otimizada para Celular:</span>
+                  </div>
+                  <p className="text-slate-600">
+                    • <strong>No celular:</strong> A imagem é gerada em alta definição e anexada diretamente no WhatsApp.<br />
+                    • <strong>No computador:</strong> A imagem é copiada (basta dar <strong>Ctrl + V</strong> no WhatsApp) e salva nos downloads.
+                  </p>
                 </div>
               )}
+            </div>
+
+            {/* OPÇÕES DE ENVIO: NÚMERO ESPECÍFICO OU ESCOLHER NO WHATSAPP */}
+            <div className="pt-2 border-t border-slate-100 space-y-3.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                2. Escolha o Destinatário:
+              </label>
+
+              {forwardError && (
+                <div className="flex items-start gap-2 p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs font-medium">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>{forwardError}</span>
+                </div>
+              )}
+
+              {/* Opção A: Enviar para número específico */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-slate-500" />
+                  Enviar para um número específico
+                </span>
+
+                <form
+                  onSubmit={handleForwardToCustomPhone}
+                  className="space-y-2"
+                >
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Digitar DDD + Número (ex: 11 99999-9999)"
+                      value={forwardPhone}
+                      onChange={(e) => {
+                        setForwardPhone(formatPhone(e.target.value, true));
+                        if (forwardError) setForwardError(null);
+                      }}
+                      className="block w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs sm:text-sm font-semibold focus:border-emerald-600 outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={forwardSending}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {forwardSending
+                        ? 'Enviando...'
+                        : forwardFormat === 'photo'
+                        ? 'Enviar Foto para este Número'
+                        : 'Enviar Texto para este Número'}
+                    </span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Opção B: Escolher no WhatsApp */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Share2 className="w-3.5 h-3.5 text-slate-500" />
+                  Ou escolher qualquer contato na sua lista:
+                </span>
+
+                <button
+                  type="button"
+                  disabled={forwardSending}
+                  onClick={handleForwardChooseContact}
+                  className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-800 rounded-xl text-xs sm:text-sm font-bold border border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    {forwardSending && forwardFormat === 'photo' ? 'Gerando e Enviando...' : 'Escolher no WhatsApp'}
+                  </span>
+                </button>
+              </div>
             </div>
 
             <div className="pt-1 flex justify-end">
@@ -997,6 +1136,21 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Notificação Flutuante de Foto Copiada */}
+      {photoToast && (
+        <div className="fixed bottom-5 right-5 left-5 sm:left-auto sm:max-w-md z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700 animate-in fade-in slide-in-from-bottom-4">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <p className="text-xs sm:text-sm font-medium leading-tight">{photoToast}</p>
+          <button
+            type="button"
+            onClick={() => setPhotoToast(null)}
+            className="ml-auto p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>
