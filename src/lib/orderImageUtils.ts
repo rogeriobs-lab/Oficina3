@@ -95,7 +95,6 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   const workshopPhone = localStorage.getItem('workshop_phone') || '';
   const workshopAddress = localStorage.getItem('workshop_address') || '';
   const workshopPix = localStorage.getItem('workshop_pix') || '';
-  const workshopNotes = localStorage.getItem('workshop_notes') || '';
 
   const servicos = order?.order_items?.filter((i: any) => i.item_type === 'servico') || [];
   const pecas = order?.order_items?.filter((i: any) => i.item_type === 'peca') || [];
@@ -121,7 +120,6 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   }
 
   const numDisplay = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
-  const isConcluida = order.status !== 'aberta' && order.status !== 'pendente';
 
   // Largura 480px garante que a tipografia ocupe quase toda a tela do celular sem distorção
   const width = 480;
@@ -142,7 +140,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   if (workshopAddress) estimatedHeight += 24;
   estimatedHeight += 20; // Divisor
 
-  // Barra de identificação (OS # e Status)
+  // Barra de identificação (OS #)
   estimatedHeight += 64 + 14;
 
   // Box Cliente e Veículo
@@ -174,13 +172,8 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   // Card Total Geral
   estimatedHeight += 96 + 18;
 
-  // Rodapé (Pix + Observações se configuradas)
+  // Rodapé (apenas Chave Pix se configurada)
   if (workshopPix) estimatedHeight += 52;
-  if (workshopNotes) {
-    estimatedHeight += 20;
-    const testNotesLines = wrapText(ctx, workshopNotes, contentWidth - 20);
-    estimatedHeight += testNotesLines.length * 20 + 8;
-  }
   estimatedHeight += padding + 10; // Bottom padding
 
   // Definir dimensões
@@ -234,7 +227,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   ctx.stroke();
   curY += 16;
 
-  // --- 2. BARRA DE IDENTIFICAÇÃO (OS # e STATUS) ---
+  // --- 2. BARRA DE IDENTIFICAÇÃO (OS #) ---
   const barH = 58;
   roundRect(ctx, padding, curY, contentWidth, barH, 12, '#0F172A');
 
@@ -242,22 +235,11 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   ctx.textAlign = 'left';
   ctx.fillStyle = '#94A3B8';
   ctx.font = '800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText('ORDEM DE SERVIÇO', padding + 14, curY + 22);
+  ctx.fillText('ORDEM DE SERVIÇO', padding + 16, curY + 22);
 
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '900 24px "Courier New", Courier, monospace';
-  ctx.fillText(`#${numDisplay}`, padding + 14, curY + 48);
-
-  // Status Badge
-  const statusW = isConcluida ? 135 : 155;
-  const statusColor = isConcluida ? '#10B981' : '#F59E0B';
-  const statusText = isConcluida ? 'CONCLUÍDO' : 'EM ANDAMENTO';
-  roundRect(ctx, width - padding - statusW - 10, curY + 11, statusW, 36, 18, statusColor);
-
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '900 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText(statusText, width - padding - statusW / 2 - 10, curY + 34);
+  ctx.fillText(`#${numDisplay}`, padding + 16, curY + 48);
 
   curY += barH + 14;
 
@@ -446,7 +428,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
 
   curY += totalH + 18;
 
-  // --- 7. RODAPÉ (PIX / OBSERVAÇÕES OPCIONAIS) ---
+  // --- 7. RODAPÉ (APENAS CHAVE PIX SE CONFIGURADA) ---
   if (workshopPix) {
     roundRect(ctx, padding, curY, contentWidth, 42, 10, '#FEF3C7', '#F59E0B', 1.5);
     ctx.textAlign = 'center';
@@ -454,25 +436,6 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
     ctx.font = '900 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(`💳 CHAVE PIX: ${workshopPix}`, width / 2, curY + 27);
     curY += 52;
-  }
-
-  if (workshopNotes) {
-    ctx.strokeStyle = '#CBD5E1';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(padding, curY);
-    ctx.lineTo(width - padding, curY);
-    ctx.stroke();
-    curY += 16;
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#334155';
-    ctx.font = '700 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    const noteLines = wrapText(ctx, workshopNotes, contentWidth - 20);
-    noteLines.forEach((l) => {
-      ctx.fillText(l, width / 2, curY);
-      curY += 20;
-    });
   }
 
   return canvas;
