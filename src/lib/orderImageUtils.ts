@@ -121,7 +121,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   }
 
   const numDisplay = orderNumber ? orderNumber.toUpperCase() : order.id.slice(0, 8).toUpperCase();
-  const isConcluida = order.status === 'concluida';
+  const isConcluida = order.status !== 'aberta' && order.status !== 'pendente';
 
   // Largura 480px garante que a tipografia ocupe quase toda a tela do celular sem distorção
   const width = 480;
@@ -174,11 +174,14 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   // Card Total Geral
   estimatedHeight += 96 + 18;
 
-  // Rodapé (Pix + Garantia)
-  if (workshopPix) estimatedHeight += 40;
-  estimatedHeight += 44; // Notas garantia
-  estimatedHeight += 26; // Documento eletrônico
-  estimatedHeight += padding + 8; // Bottom padding
+  // Rodapé (Pix + Observações se configuradas)
+  if (workshopPix) estimatedHeight += 52;
+  if (workshopNotes) {
+    estimatedHeight += 20;
+    const testNotesLines = wrapText(ctx, workshopNotes, contentWidth - 20);
+    estimatedHeight += testNotesLines.length * 20 + 8;
+  }
+  estimatedHeight += padding + 10; // Bottom padding
 
   // Definir dimensões
   canvas.width = width;
@@ -443,7 +446,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
 
   curY += totalH + 18;
 
-  // --- 7. RODAPÉ (PIX + GARANTIA) ---
+  // --- 7. RODAPÉ (PIX / OBSERVAÇÕES OPCIONAIS) ---
   if (workshopPix) {
     roundRect(ctx, padding, curY, contentWidth, 42, 10, '#FEF3C7', '#F59E0B', 1.5);
     ctx.textAlign = 'center';
@@ -453,27 +456,24 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
     curY += 52;
   }
 
-  ctx.strokeStyle = '#CBD5E1';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(padding, curY);
-  ctx.lineTo(width - padding, curY);
-  ctx.stroke();
-  curY += 16;
+  if (workshopNotes) {
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padding, curY);
+    ctx.lineTo(width - padding, curY);
+    ctx.stroke();
+    curY += 16;
 
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#334155';
-  ctx.font = '700 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  const notesText = workshopNotes || 'Garantia de 90 dias conforme CDC sobre serviços e peças executados.';
-  const noteLines = wrapText(ctx, notesText, contentWidth - 20);
-  noteLines.forEach((l) => {
-    ctx.fillText(l, width / 2, curY);
-    curY += 20;
-  });
-
-  ctx.fillStyle = '#64748B';
-  ctx.font = '800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillText('DOCUMENTO EMITIDO ELETRONICAMENTE', width / 2, curY + 6);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#334155';
+    ctx.font = '700 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const noteLines = wrapText(ctx, workshopNotes, contentWidth - 20);
+    noteLines.forEach((l) => {
+      ctx.fillText(l, width / 2, curY);
+      curY += 20;
+    });
+  }
 
   return canvas;
 }

@@ -44,7 +44,7 @@ export const generateOrderPdf = (order: PdfOrder, customOrderNum?: string): jsPD
   doc.text(`Data: ${formatDate(order.order_date)}`, 15, 29);
 
   // Status Badge
-  const isConcluida = order.status === 'concluida';
+  const isConcluida = order.status !== 'aberta' && order.status !== 'pendente';
   const statusText = isConcluida ? 'CONCLUÍDO' : 'ABERTO';
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
