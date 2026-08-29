@@ -229,11 +229,11 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
 
   // --- 2. BARRA DE IDENTIFICAÇÃO (OS #) ---
   const barH = 58;
-  roundRect(ctx, padding, curY, contentWidth, barH, 12, '#0F172A');
+  roundRect(ctx, padding, curY, contentWidth, barH, 12, '#1E3A8A');
 
   // OS #
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#94A3B8';
+  ctx.fillStyle = '#BFDBFE';
   ctx.font = '800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   ctx.fillText('ORDEM DE SERVIÇO', padding + 16, curY + 22);
 
@@ -312,7 +312,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   // --- 4. SEÇÃO DE SERVIÇOS ---
   if (servicos.length > 0) {
     const secH = 38;
-    roundRect(ctx, padding, curY, contentWidth, secH, 8, '#0F172A');
+    roundRect(ctx, padding, curY, contentWidth, secH, 8, '#1E3A8A');
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#FFFFFF';
@@ -369,7 +369,7 @@ export function generateOrderImageCanvas(order: any, orderNumber: string): HTMLC
   // --- 5. SEÇÃO DE PEÇAS ---
   if (pecas.length > 0) {
     const secH = 38;
-    roundRect(ctx, padding, curY, contentWidth, secH, 8, '#0F172A');
+    roundRect(ctx, padding, curY, contentWidth, secH, 8, '#1E3A8A');
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#FFFFFF';
