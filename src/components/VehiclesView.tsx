@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, consolidateDuplicateVehicles, deleteVehicleAndAssociations, fetchAllClientsAllPages, fetchAllVehiclesAllPages, type Vehicle, type Client } from '@/src/lib/supabase';
 import { theme, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
+import VoiceInputButton from './VoiceInputButton';
 import { Plus, Search, Car, User, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, ChevronDown, Check, Loader2, Layers } from 'lucide-react';
 
 type VehicleRow = Vehicle & { clients?: { name: string } | Array<{ name: string }> | null };
@@ -840,9 +841,17 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">
-                      Placa *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Placa *
+                      </label>
+                      <VoiceInputButton
+                        value={formPlate}
+                        onTranscript={(t) => setFormPlate(t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
+                        size="xs"
+                        title="Ditar placa"
+                      />
+                    </div>
                     <input
                       type="text"
                       required
@@ -871,9 +880,17 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">
-                      Marca *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Marca *
+                      </label>
+                      <VoiceInputButton
+                        value={formBrand}
+                        onTranscript={(t) => setFormBrand(t)}
+                        size="xs"
+                        title="Ditar marca"
+                      />
+                    </div>
                     <input
                       type="text"
                       required
@@ -885,9 +902,17 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">
-                      Modelo *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Modelo *
+                      </label>
+                      <VoiceInputButton
+                        value={formModel}
+                        onTranscript={(t) => setFormModel(t)}
+                        size="xs"
+                        title="Ditar modelo"
+                      />
+                    </div>
                     <input
                       type="text"
                       required
@@ -921,9 +946,18 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    Observações
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Observações
+                    </label>
+                    <VoiceInputButton
+                      value={formNotes}
+                      append={true}
+                      onTranscript={(t) => setFormNotes(t)}
+                      size="xs"
+                      title="Ditar observações do veículo"
+                    />
+                  </div>
                   <textarea
                     rows={2}
                     placeholder="Notas, observações sobre o carro..."
@@ -1013,26 +1047,37 @@ export default function VehiclesView({ onNavigate, params }: VehiclesViewProps) 
                   setPage(1);
                 }
               }}
-              className="block w-full pl-11 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all outline-none"
+              className="block w-full pl-11 pr-20 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all outline-none"
             />
-            {loading ? (
-              <div className="absolute right-3 top-3.5 flex items-center gap-1">
-                <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
-              </div>
-            ) : searchInput ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput('');
-                  setSearch('');
+            <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
+              {loading ? (
+                <div className="flex items-center p-1">
+                  <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                </div>
+              ) : searchInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearch('');
+                    setPage(1);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
+                  title="Limpar pesquisa"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : null}
+              <VoiceInputButton
+                value={searchInput}
+                onTranscript={(spoken) => {
+                  setSearchInput(spoken);
+                  setSearch(spoken);
                   setPage(1);
                 }}
-                className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Limpar pesquisa"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            ) : null}
+                title="Pesquisar por voz (fale a placa, marca ou modelo)"
+              />
+            </div>
           </div>
           <button
             type="submit"

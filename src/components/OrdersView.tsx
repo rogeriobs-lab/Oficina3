@@ -3,6 +3,7 @@ import { supabase, deleteServiceOrder, fetchAllClientsAllPages, fetchAllVehicles
 import { theme, formatDate, formatCurrency, normalizeForSearch } from '@/src/lib/theme';
 import { computeOrderNumbers } from '@/src/lib/orderUtils';
 import { LoadingState, ErrorState, EmptyState } from './States';
+import VoiceInputButton from './VoiceInputButton';
 import { Plus, Search, ClipboardList, Gauge, Calendar, ChevronRight, ChevronLeft, X, Trash2, Loader2 } from 'lucide-react';
 
 type OrderRow = {
@@ -336,22 +337,33 @@ export default function OrdersView({ onNavigate, params }: OrdersViewProps) {
                   setPage(1);
                 }
               }}
-              className="block w-full pl-11 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all outline-none"
+              className="block w-full pl-11 pr-20 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all outline-none"
             />
-            {loading ? (
-              <div className="absolute right-3 top-3.5 flex items-center gap-1">
-                <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
-              </div>
-            ) : searchInput ? (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Limpar pesquisa"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            ) : null}
+            <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
+              {loading ? (
+                <div className="flex items-center p-1">
+                  <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
+                </div>
+              ) : searchInput ? (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
+                  title="Limpar pesquisa"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : null}
+              <VoiceInputButton
+                value={searchInput}
+                onTranscript={(spoken) => {
+                  setSearchInput(spoken);
+                  setSearch(spoken);
+                  setPage(1);
+                }}
+                title="Pesquisar por voz (fale a placa, cliente ou modelo)"
+              />
+            </div>
           </div>
           <button
             type="submit"

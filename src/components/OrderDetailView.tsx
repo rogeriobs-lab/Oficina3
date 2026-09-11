@@ -4,6 +4,7 @@ import { theme, formatDate, formatCurrency, formatPhone, isInvalidPhone } from '
 import { getSingleOrderNumber } from '@/src/lib/orderUtils';
 import { formatItemDescription, parseItemDescription } from '@/src/lib/serviceItemUtils';
 import { LoadingState, ErrorState } from './States';
+import VoiceInputButton from './VoiceInputButton';
 import { exportOrderToPdf } from '@/src/lib/exportPdf';
 import { copyOrderImageToClipboard, shareOrderImageNatively } from '@/src/lib/orderImageUtils';
 import {
@@ -818,9 +819,17 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
               )}
 
               <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  {addType === 'servico' ? 'Nome do Serviço (Mão de Obra) *' : 'Descrição da Peça *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    {addType === 'servico' ? 'Nome do Serviço (Mão de Obra) *' : 'Descrição da Peça *'}
+                  </label>
+                  <VoiceInputButton
+                    value={addTitle}
+                    onTranscript={(spoken) => setAddTitle(spoken)}
+                    size="xs"
+                    title={addType === 'servico' ? 'Ditar nome do serviço' : 'Ditar descrição da peça'}
+                  />
+                </div>
                 <input
                   type="text"
                   required
@@ -871,13 +880,23 @@ export default function OrderDetailView({ orderId, onBack, onNavigate }: OrderDe
                       {addDetails.map((detail, dIdx) => (
                         <div key={dIdx} className="flex items-center gap-2">
                           <span className="text-sky-500 font-bold text-xs pl-1">•</span>
-                          <input
-                            type="text"
-                            placeholder={`Item ${dIdx + 1} deste serviço (ex: Troca de pastilhas, sangria de freio...)`}
-                            value={detail}
-                            onChange={(e) => updateDetailInModal(dIdx, e.target.value)}
-                            className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-sky-400 rounded-lg text-slate-800 text-xs transition-all outline-none font-medium"
-                          />
+                          <div className="flex-1 relative flex items-center">
+                            <input
+                              type="text"
+                              placeholder={`Item ${dIdx + 1} deste serviço (ex: Troca de pastilhas, sangria de freio...)`}
+                              value={detail}
+                              onChange={(e) => updateDetailInModal(dIdx, e.target.value)}
+                              className="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-sky-400 rounded-lg text-slate-800 text-xs transition-all outline-none font-medium"
+                            />
+                            <div className="absolute right-1">
+                              <VoiceInputButton
+                                value={detail}
+                                onTranscript={(spoken) => updateDetailInModal(dIdx, spoken)}
+                                size="xs"
+                                title="Ditar item do serviço"
+                              />
+                            </div>
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeDetailFromModal(dIdx)}

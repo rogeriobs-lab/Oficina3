@@ -3,6 +3,7 @@ import { supabase, fetchAllVehiclesAllPages, type Client, type Vehicle } from '@
 import { theme, formatCurrency, normalizeForSearch } from '@/src/lib/theme';
 import { formatItemDescription } from '@/src/lib/serviceItemUtils';
 import { LoadingState, ErrorState } from './States';
+import VoiceInputButton from './VoiceInputButton';
 import {
   ArrowLeft,
   ChevronDown,
@@ -255,24 +256,38 @@ function VehicleCombobox({ vehicles, selectedVehicleId, onSelectVehicle, onMerge
               onSelectVehicle('');
             }
           }}
-          className={`block w-full pl-10 pr-10 py-2.5 bg-gray-50 border rounded-xl text-gray-900 text-sm transition-all outline-none font-medium ${
+          className={`block w-full pl-10 pr-18 py-2.5 bg-gray-50 border rounded-xl text-gray-900 text-sm transition-all outline-none font-medium ${
             isOpen ? 'bg-white border-amber-500 ring-2 ring-amber-500/20 shadow-xs' : 'border-gray-200 hover:border-gray-300'
           } ${error ? 'border-red-400 bg-red-50/50' : ''}`}
         />
-        {searchingServer ? (
-          <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin absolute right-3 pointer-events-none" />
-        ) : query ? (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg absolute right-3 cursor-pointer"
-            title="Limpar busca de veículo"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 pointer-events-none" />
-        )}
+        <div className="absolute right-2.5 flex items-center gap-1">
+          {searchingServer ? (
+            <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mr-1" />
+          ) : query ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              title="Limpar busca de veículo"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none mr-0.5" />
+          )}
+          <VoiceInputButton
+            value={query}
+            onTranscript={(spoken) => {
+              setQuery(spoken);
+              setIsOpen(true);
+              if (selectedVehicleId) {
+                onSelectVehicle('');
+              }
+            }}
+            size="xs"
+            title="Ditar placa ou veículo"
+          />
+        </div>
       </div>
 
       {/* Dropdown list */}
@@ -655,15 +670,23 @@ export default function OrderNewView({ onBack, onNavigateToOrderDetails, presele
                         </span>
                       </div>
 
-                      <div className="flex-1 w-full">
+                      <div className="flex-1 w-full relative flex items-center">
                         <input
                           type="text"
                           required
                           placeholder={item.item_type === 'servico' ? 'Nome do serviço (ex: Mão de Obra, Revisão Geral...)' : 'Descrição da peça (ex: Filtro de óleo)...'}
                           value={item.title}
                           onChange={(e) => updateItem(item.key, 'title', e.target.value)}
-                          className="block w-full px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:border-slate-400 transition-all outline-none font-medium"
+                          className="block w-full pl-3.5 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:border-slate-400 transition-all outline-none font-medium"
                         />
+                        <div className="absolute right-1.5">
+                          <VoiceInputButton
+                            value={item.title}
+                            onTranscript={(spoken) => updateItem(item.key, 'title', spoken)}
+                            size="xs"
+                            title="Ditar nome do serviço ou peça"
+                          />
+                        </div>
                       </div>
 
                       <div className="w-full sm:w-32 shrink-0">
@@ -713,13 +736,23 @@ export default function OrderNewView({ onBack, onNavigateToOrderDetails, presele
                             {item.details.map((detail, dIdx) => (
                               <div key={dIdx} className="flex items-center gap-2">
                                 <span className="text-sky-500 font-bold text-xs pl-1 shrink-0">•</span>
-                                <input
-                                  type="text"
-                                  placeholder={`Item ${dIdx + 1} deste serviço (ex: Troca de pastilhas, sangria de fluido...)`}
-                                  value={detail}
-                                  onChange={(e) => updateDetailOfItem(item.key, dIdx, e.target.value)}
-                                  className="flex-1 px-3 py-1.5 bg-white border border-sky-100 focus:border-sky-300 rounded-lg text-slate-800 text-xs transition-all outline-none"
-                                />
+                                <div className="flex-1 relative flex items-center">
+                                  <input
+                                    type="text"
+                                    placeholder={`Item ${dIdx + 1} deste serviço (ex: Troca de pastilhas, sangria de fluido...)`}
+                                    value={detail}
+                                    onChange={(e) => updateDetailOfItem(item.key, dIdx, e.target.value)}
+                                    className="w-full pl-3 pr-8 py-1.5 bg-white border border-sky-100 focus:border-sky-300 rounded-lg text-slate-800 text-xs transition-all outline-none"
+                                  />
+                                  <div className="absolute right-1">
+                                    <VoiceInputButton
+                                      value={detail}
+                                      onTranscript={(spoken) => updateDetailOfItem(item.key, dIdx, spoken)}
+                                      size="xs"
+                                      title="Ditar item do serviço"
+                                    />
+                                  </div>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => removeDetailOfItem(item.key, dIdx)}

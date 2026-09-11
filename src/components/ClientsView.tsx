@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, deleteClientAndAssociations, fetchAllClientsAllPages, type Client } from '@/src/lib/supabase';
 import { theme, formatPhone, isInvalidPhone, normalizeForSearch } from '@/src/lib/theme';
 import { LoadingState, ErrorState, EmptyState } from './States';
+import VoiceInputButton from './VoiceInputButton';
 import { Plus, Search, User, Phone, StickyNote, Pencil, Trash2, X, AlertCircle, ChevronLeft, ChevronRight, ClipboardList, Loader2 } from 'lucide-react';
 
 interface ClientsViewProps {
@@ -244,9 +245,17 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
               )}
 
               <div className="space-y-1">
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Nome *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Nome *
+                  </label>
+                  <VoiceInputButton
+                    value={formName}
+                    onTranscript={(t) => setFormName(t)}
+                    size="xs"
+                    title="Ditar nome do cliente"
+                  />
+                </div>
                 <input
                   type="text"
                   required
@@ -272,9 +281,18 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Observações
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Observações
+                  </label>
+                  <VoiceInputButton
+                    value={formNotes}
+                    append={true}
+                    onTranscript={(t) => setFormNotes(t)}
+                    size="xs"
+                    title="Ditar observações do cliente"
+                  />
+                </div>
                 <textarea
                   rows={3}
                   placeholder="Notas, observações sobre o cliente..."
@@ -348,26 +366,37 @@ export default function ClientsView({ onNavigate, params }: ClientsViewProps) {
                   setPage(1);
                 }
               }}
-              className="block w-full pl-11 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all outline-none"
+              className="block w-full pl-11 pr-20 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all outline-none"
             />
-            {loading ? (
-              <div className="absolute right-3 top-3.5 flex items-center gap-1">
-                <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
-              </div>
-            ) : searchInput ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput('');
-                  setSearch('');
+            <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
+              {loading ? (
+                <div className="flex items-center p-1">
+                  <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
+                </div>
+              ) : searchInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearch('');
+                    setPage(1);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
+                  title="Limpar pesquisa"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : null}
+              <VoiceInputButton
+                value={searchInput}
+                onTranscript={(spoken) => {
+                  setSearchInput(spoken);
+                  setSearch(spoken);
                   setPage(1);
                 }}
-                className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Limpar pesquisa"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            ) : null}
+                title="Pesquisar por voz (fale o nome ou telefone do cliente)"
+              />
+            </div>
           </div>
           <button
             type="submit"
